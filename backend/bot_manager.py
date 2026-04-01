@@ -14,9 +14,14 @@ from typing import Dict, List, Optional, Any, Tuple
 from contextlib import contextmanager
 import logging
 
-from bot_api import PokerBotAPI, PlayerAction
-from backend.engine.cards import Card
-from backend.engine.poker_game import GameState
+try:
+    from backend.bot_api import PokerBotAPI
+    from backend.engine.cards import Card
+    from backend.engine.poker_game import GameState, PlayerAction
+except ImportError:
+    from bot_api import PokerBotAPI
+    from engine.cards import Card
+    from engine.poker_game import GameState, PlayerAction
 
 
 class TimeoutException(Exception):

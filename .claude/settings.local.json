@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"TODO\\\\|FIXME\\\\|BUG\\\\|ISSUE\\\\|XXX\" /c/Users/ejdal/Documents/GitHub/poker/*.py)",
+      "Bash(wc -l /c/Users/ejdal/Documents/GitHub/poker/*.py /c/Users/ejdal/Documents/GitHub/poker/backend/*.py /c/Users/ejdal/Documents/GitHub/poker/backend/engine/*.py)"
+    ]
+  }
+}

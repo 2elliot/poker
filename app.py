@@ -17,7 +17,8 @@ from datetime import timedelta
 import secrets
 from dotenv import load_dotenv
 
-load_dotenv("/home/poker/poker/.env")
+# Load .env from project directory (works on both Windows and Linux)
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))

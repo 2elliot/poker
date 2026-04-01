@@ -14,10 +14,16 @@ import multiprocessing
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
-from backend.engine.poker_game import PokerGame, GameState, PlayerAction
-from backend.engine.cards import HandEvaluator
-from backend.tournament import PokerTournament, TournamentSettings, TournamentType
-from backend.bot_manager import BotManager
+try:
+    from backend.engine.poker_game import PokerGame, GameState, PlayerAction
+    from backend.engine.cards import HandEvaluator
+    from backend.tournament import PokerTournament, TournamentSettings, TournamentType
+    from backend.bot_manager import BotManager
+except ImportError:
+    from engine.poker_game import PokerGame, GameState, PlayerAction
+    from engine.cards import HandEvaluator
+    from tournament import PokerTournament, TournamentSettings, TournamentType
+    from bot_manager import BotManager
 
 
 class TournamentRunner:

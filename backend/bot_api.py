@@ -4,8 +4,12 @@ This defines the interface that all student bots must implement
 """
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any
-from backend.engine.cards import Card
-from backend.engine.poker_game import GameState, PlayerAction
+try:
+    from backend.engine.cards import Card
+    from backend.engine.poker_game import GameState, PlayerAction
+except ImportError:
+    from engine.cards import Card
+    from engine.poker_game import GameState, PlayerAction
 import logging
 
 
@@ -86,7 +90,6 @@ class GameInfoAPI:
     Utility class providing game information and helper methods for bots
     """
     
-    @staticmethod
     @staticmethod
     def get_pot_odds(pot: int, bet_to_call: int) -> float:
         """
