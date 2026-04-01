@@ -42,7 +42,9 @@ CORS(app)
 
 # Security configuration - PRODUCTION READY
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+# Only set Secure cookie flag if HTTPS is actually configured
+# (setting this over plain HTTP causes the browser to silently discard the session cookie)
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('USE_HTTPS', '').lower() == 'true'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)

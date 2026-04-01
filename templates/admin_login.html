@@ -244,40 +244,6 @@
     </div>
 
     <script>
-        // Track if account is locked (stored in localStorage to persist across page reloads)
-        const LOCKOUT_KEY = 'admin_lockout_until';
-        const ATTEMPTS_KEY = 'admin_login_attempts';
-
-        function isLockedOut() {
-            const lockoutUntil = localStorage.getItem(LOCKOUT_KEY);
-            if (lockoutUntil) {
-                const unlockTime = parseInt(lockoutUntil);
-                if (Date.now() < unlockTime) {
-                    return Math.ceil((unlockTime - Date.now()) / 1000 / 60); // Minutes remaining
-                } else {
-                    // Lockout expired
-                    localStorage.removeItem(LOCKOUT_KEY);
-                    localStorage.removeItem(ATTEMPTS_KEY);
-                }
-            }
-            return false;
-        }
-
-        function getAttemptCount() {
-            return parseInt(localStorage.getItem(ATTEMPTS_KEY) || '0');
-        }
-
-        function incrementAttempts() {
-            const count = getAttemptCount() + 1;
-            localStorage.setItem(ATTEMPTS_KEY, count.toString());
-            return count;
-        }
-
-        function resetAttempts() {
-            localStorage.removeItem(ATTEMPTS_KEY);
-            localStorage.removeItem(LOCKOUT_KEY);
-        }
-
         function showAlert(message, type = 'error') {
             const alertBox = document.getElementById('alertBox');
             alertBox.className = `alert alert-${type} show`;
@@ -305,21 +271,12 @@
 
         async function handleLogin(event) {
             event.preventDefault();
-            
-            // Check if locked out
-            const lockoutMinutes = isLockedOut();
-            if (lockoutMinutes) {
-                showAlert(`Account locked. Try again in ${lockoutMinutes} minutes.`, 'error');
-                document.getElementById('rateLimitWarning').style.display = 'block';
-                document.getElementById('loginBtn').disabled = true;
-                return;
-            }
-            
+
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
-            
+
             setLoading(true);
-            
+
             try {
                 const response = await fetch('/api/auth/login', {
                     method: 'POST',
@@ -328,48 +285,16 @@
                     },
                     body: JSON.stringify({ username, password })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert('Login successful! Redirecting...', 'success');
-                    resetAttempts(); // Clear attempts on success
-                    
                     setTimeout(() => {
                         window.location.href = '/admin/review';
                     }, 1000);
                 } else {
-                    // Increment attempts
-                    const attemptCount = incrementAttempts();
-                    
-                    // Check for server-side lockout message
-                    if (data.error && data.error.includes('locked') || data.error.includes('many attempts')) {
-                        // Server says we're locked out
-                        const lockoutUntil = Date.now() + (15 * 60 * 1000); // 15 minutes
-                        localStorage.setItem(LOCKOUT_KEY, lockoutUntil.toString());
-                        showAlert('Too many failed attempts. Account locked for 15 minutes.', 'error');
-                        document.getElementById('rateLimitWarning').style.display = 'block';
-                        document.getElementById('loginBtn').disabled = true;
-                    } else if (attemptCount >= 8) {
-                        // Client-side lockout after 8 attempts
-                        const lockoutUntil = Date.now() + (15 * 60 * 1000);
-                        localStorage.setItem(LOCKOUT_KEY, lockoutUntil.toString());
-                        showAlert('Too many failed attempts. Account locked for 15 minutes.', 'error');
-                        document.getElementById('rateLimitWarning').style.display = 'block';
-                        document.getElementById('loginBtn').disabled = true;
-                    } else {
-                        showAlert(data.error || 'Invalid credentials', 'error');
-                        
-                        // Show warning after 3 attempts
-                        if (attemptCount >= 3) {
-                            showAlert(
-                                `Warning: ${8 - attemptCount} attempts remaining before 15-minute lockout`, 
-                                'warning'
-                            );
-                        }
-                    }
-                    
-                    // Clear password field
+                    showAlert(data.error || 'Invalid credentials', 'error');
                     document.getElementById('password').value = '';
                     document.getElementById('password').focus();
                 }
