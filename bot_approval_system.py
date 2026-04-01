@@ -14,7 +14,7 @@ import logging
 import sys
 import importlib.util
 import types
-from threading import Lock
+from threading import RLock
 
 
 class BotStatus(Enum):
@@ -38,8 +38,9 @@ class BotReviewSystem:
         
         self.submissions_file = os.path.join(review_directory, "submissions.json")
         
-        # Thread safety for concurrent requests
-        self._lock = Lock()
+        # Thread safety for concurrent requests (RLock allows reentrant locking
+        # since _save_submissions is called from methods that already hold the lock)
+        self._lock = RLock()
         
         self.submissions = self._load_submissions()
         
