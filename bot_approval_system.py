@@ -471,19 +471,19 @@ class BotReviewSystem:
                         "error": f"Bot validation failed: {validation['error']}"
                     }
                 
-                # Read the submitter's password
-                password_file = os.path.join(self.review_directory, f"{submission_id}.pwd")
-                with open(password_file, 'r', encoding='utf-8') as f:
-                    password = base64.b64decode(f.read().encode()).decode()
-                
+                # Use MASTER_PASSWORD for encryption (same key used to decrypt during tournaments)
+                master_password = os.environ.get('MASTER_PASSWORD')
+                if not master_password:
+                    return {"success": False, "error": "MASTER_PASSWORD not configured on server"}
+
                 # Encrypt and store using the secure storage system
                 from secure_bot_storage import SecureBotStorage
                 storage = SecureBotStorage(self.approved_directory)
-                
+
                 result = storage.upload_bot(
-                    submission["bot_name"], 
-                    bot_code, 
-                    password
+                    submission["bot_name"],
+                    bot_code,
+                    master_password
                 )
                 
                 if not result["success"]:
