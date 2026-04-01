@@ -152,29 +152,11 @@ class AdminAuthSystem:
         Authenticate admin user
         Returns: {"success": bool, "user": User or None, "error": str}
         """
-        # Check rate limit
-        if not self.check_rate_limit(ip, max_requests=5, window_seconds=60):
-            self._log_audit_event("RATE_LIMIT", username, ip, "Too many requests")
-            return {
-                "success": False,
-                "error": "Too many requests. Please try again in 1 minute."
-            }
-
-        # Check lockout
-        if self.is_locked_out(ip):
-            remaining = int(self.lockout_until[ip] - time.time())
-            self._log_audit_event("LOCKED_OUT", username, ip, f"Account locked for {remaining}s")
-            return {
-                "success": False,
-                "error": f"Too many failed attempts. Try again in {remaining // 60} minutes."
-            }
-
         # Load admin data
         data = self._load_auth_data()
 
         # Check if user exists
         if username not in data["admins"]:
-            self.record_failed_attempt(ip)
             self._log_audit_event("LOGIN_FAIL", username, ip, "Invalid username")
             return {"success": False, "error": "Invalid credentials"}
 
@@ -187,14 +169,10 @@ class AdminAuthSystem:
 
         # Verify password
         if not self._verify_password(password, admin["password_hash"]):
-            self.record_failed_attempt(ip)
             self._log_audit_event("LOGIN_FAIL", username, ip, "Invalid password")
             return {"success": False, "error": "Invalid credentials"}
 
-        # Success!
-        self.reset_failed_attempts(ip)
-
-        # Update last login
+        # Success - update last login
         admin["last_login"] = datetime.now().isoformat()
         self._save_auth_data(data)
 

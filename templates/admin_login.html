@@ -233,9 +233,6 @@
                 Login
             </button>
 
-            <div id="rateLimitWarning" class="rate-limit-warning" style="display: none;">
-                Too many attempts. Please wait before trying again.
-            </div>
         </form>
 
         <div class="footer">
@@ -321,29 +318,8 @@
             }
         }
 
-        // Check lockout status on page load
-        function checkLockoutStatus() {
-            const lockoutMinutes = isLockedOut();
-            if (lockoutMinutes) {
-                showAlert(`Account locked. Try again in ${lockoutMinutes} minutes.`, 'error');
-                document.getElementById('rateLimitWarning').style.display = 'block';
-                document.getElementById('loginBtn').disabled = true;
-            }
-        }
-
         // Check on page load
         checkAuth();
-        checkLockoutStatus();
-
-        // Check lockout status every minute
-        setInterval(() => {
-            const lockoutMinutes = isLockedOut();
-            if (!lockoutMinutes) {
-                // Lockout expired, re-enable form
-                document.getElementById('rateLimitWarning').style.display = 'none';
-                document.getElementById('loginBtn').disabled = false;
-            }
-        }, 60000);
     </script>
 </body>
 </html>
