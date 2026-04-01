@@ -16,6 +16,16 @@ import importlib.util
 import types
 from threading import RLock
 
+# Ensure bot code imports like "from bot_api import PokerBotAPI" resolve correctly
+import backend.bot_api
+import backend.engine
+import backend.engine.poker_game
+import backend.engine.cards
+sys.modules.setdefault('bot_api', backend.bot_api)
+sys.modules.setdefault('engine', backend.engine)
+sys.modules.setdefault('engine.poker_game', backend.engine.poker_game)
+sys.modules.setdefault('engine.cards', backend.engine.cards)
+
 
 class BotStatus(Enum):
     PENDING_REVIEW = "pending_review"

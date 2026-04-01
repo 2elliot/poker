@@ -3,6 +3,7 @@ Secure Bot Storage and Management System
 Keeps bot code encrypted while allowing tournaments to run
 """
 import os
+import sys
 import json
 import hashlib
 from cryptography.fernet import Fernet
@@ -14,6 +15,16 @@ from typing import Optional, List, Dict
 import types
 
 from backend.bot_api import PokerBotAPI
+import backend.bot_api
+import backend.engine.poker_game
+import backend.engine.cards
+
+# Register module aliases so bot code like "from bot_api import PokerBotAPI"
+# resolves to the same class objects as "from backend.bot_api import PokerBotAPI"
+sys.modules.setdefault('bot_api', backend.bot_api)
+sys.modules.setdefault('engine', backend.engine)
+sys.modules.setdefault('engine.poker_game', backend.engine.poker_game)
+sys.modules.setdefault('engine.cards', backend.engine.cards)
 
 
 class SecureBotStorage:
