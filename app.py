@@ -55,6 +55,13 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login_page' # type: ignore
 
+@login_manager.unauthorized_handler
+def unauthorized():
+    """Return JSON for API requests instead of redirecting to login page"""
+    if request.path.startswith('/api/'):
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    return redirect(url_for('login_page'))
+
 # Initialize systems - ALL DATA PERSISTS
 auth_system = AdminAuthSystem()
 review_system = BotReviewSystem()
