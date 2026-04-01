@@ -91,8 +91,22 @@ else
     echo "✓ .env file already exists"
 fi
 
+# Find the directory containing app.py (handles cloned subdirectories)
+APP_DIR="$PROJECT_DIR"
+if [ ! -f "$PROJECT_DIR/app.py" ]; then
+    # Check if app.py is in a subdirectory (e.g., after git clone creates repo-named folder)
+    APP_PY_PATH=$(find "$PROJECT_DIR" -maxdepth 2 -name "app.py" -not -path "*/venv/*" | head -1)
+    if [ -n "$APP_PY_PATH" ]; then
+        APP_DIR=$(dirname "$APP_PY_PATH")
+        echo "Found app.py in: $APP_DIR"
+    else
+        echo "ERROR: app.py not found in $PROJECT_DIR"
+        exit 1
+    fi
+fi
+
 # Create systemd service
-echo "⚙️  Creating systemd service..."
+echo "Creating systemd service..."
 sudo tee /etc/systemd/system/poker-tournament.service > /dev/null << EOF
 [Unit]
 Description=Poker Tournament Server
@@ -101,9 +115,9 @@ After=network.target
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$PROJECT_DIR
-EnvironmentFile=$PROJECT_DIR/.env
-ExecStart=$PROJECT_DIR/venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 app:app
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$APP_DIR/.env
+ExecStart=$PROJECT_DIR/venv/bin/gunicorn --chdir $APP_DIR -w 4 -b 127.0.0.1:5000 app:app
 Restart=always
 RestartSec=10
 
