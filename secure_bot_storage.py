@@ -255,6 +255,7 @@ class SecureBotStorage:
     
     def list_bots(self) -> List[Dict]:
         """List all available bots (without exposing code)"""
+        self.metadata = self._load_metadata()
         bots = []
         for bot_name, info in self.metadata["bots"].items():
             bots.append({
