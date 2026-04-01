@@ -433,7 +433,24 @@
                 return;
             }
 
-            container.innerHTML = currentSubmissions.map(sub => `
+            container.innerHTML = currentSubmissions.map(sub => {
+                const statusClass = {
+                    'pending_review': 'pending',
+                    'approved': 'approved',
+                    'rejected': 'rejected',
+                    'revision_requested': 'pending'
+                }[sub.status] || 'pending';
+
+                const statusText = {
+                    'pending_review': 'Pending Review',
+                    'approved': 'Approved',
+                    'rejected': 'Rejected',
+                    'revision_requested': 'Revision Requested'
+                }[sub.status] || sub.status;
+
+                const isPending = sub.status === 'pending_review' || sub.status === 'revision_requested';
+
+                return `
                 <div class="submission-card">
                     <div class="submission-header">
                         <div class="submission-info">
@@ -441,15 +458,15 @@
                             <div class="submission-meta">
                                 <span>📧 ${escapeHtml(sub.submitter_email)}</span>
                                 <span>📅 ${new Date(sub.submission_date).toLocaleString()}</span>
-                                <span>📄 ${sub.code_lines} lines</span>
+                                ${sub.code_lines ? `<span>📄 ${sub.code_lines} lines</span>` : ''}
                             </div>
                         </div>
-                        <span class="status-badge status-pending">Pending Review</span>
+                        <span class="status-badge status-${statusClass}">${statusText}</span>
                     </div>
 
                     ${sub.review_notes && sub.review_notes.length > 0 ? `
                         <div class="review-notes">
-                            <h4>Previous Review Notes</h4>
+                            <h4>Review Notes</h4>
                             ${sub.review_notes.map(note => `
                                 <div class="note-item">
                                     <div class="note-date">${new Date(note.date).toLocaleString()}</div>
@@ -459,6 +476,7 @@
                         </div>
                     ` : ''}
 
+                    ${sub.safety_check ? `
                     <div class="safety-check">
                         <div class="safety-header">
                             <strong>Automated Safety Check</strong>
@@ -481,7 +499,9 @@
                             </ul>
                         ` : '<p style="color: #5cb85c;">✓ No issues detected</p>'}
                     </div>
+                    ` : ''}
 
+                    ${sub.code ? `
                     <div class="code-header">
                         <strong>Bot Code</strong>
                         <span class="toggle-code" onclick="toggleCode('${sub.submission_id}')">
@@ -491,7 +511,9 @@
                     <div class="code-preview collapsed" id="code-${sub.submission_id}">
                         <pre>${escapeHtml(sub.code)}</pre>
                     </div>
+                    ` : ''}
 
+                    ${isPending ? `
                     <div class="actions">
                         <button class="btn btn-approve" onclick="approveBot('${sub.submission_id}')">
                             ✓ Approve
@@ -505,7 +527,7 @@
                     </div>
 
                     <div class="feedback-form" id="feedback-${sub.submission_id}">
-                        <textarea id="feedback-text-${sub.submission_id}" 
+                        <textarea id="feedback-text-${sub.submission_id}"
                                   placeholder="Enter your feedback or reason..."></textarea>
                         <div class="form-actions">
                             <button class="btn btn-submit" onclick="submitFeedback('${sub.submission_id}')">
@@ -516,8 +538,9 @@
                             </button>
                         </div>
                     </div>
+                    ` : ''}
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         function toggleCode(submissionId) {
