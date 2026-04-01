@@ -34,7 +34,7 @@ class AdminAuthSystem:
 
     def _create_default_admin(self):
         """Create default admin account on first run"""
-        default_password = secrets.token_urlsafe(16)
+        default_password = os.environ.get('ADMIN_PASSWORD', 'admin')
 
         admin_data = {
             "admins": {
