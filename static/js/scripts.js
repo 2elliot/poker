@@ -1,7 +1,6 @@
 // API Configuration
-// Use relative URL so it works both locally and in production
-const API_BASE_URL = window.location.hostname === 'localhost' 
-    ? 'http://localhost:5000/api' 
+const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
     : '/api';
 
 // Game State
@@ -13,7 +12,6 @@ const state = {
     availableBots: [],
     tablePlayers: [],
     isPlaying: false,
-    isPaused: false,
     speed: 1,
     gameInterval: null,
     tournamentInitialized: false,
@@ -22,7 +20,10 @@ const state = {
     chipHistory: {},
     eventSource: null,
     communityCards: [],
-    pot: 0
+    pot: 0,
+    // Guards against overlapping step calls
+    stepping: false,
+    handInProgress: false,
 };
 
 // Initialize
@@ -48,7 +49,6 @@ async function loadAvailableBots() {
         }
     } catch (error) {
         logToConsole(`Failed to connect to backend: ${error.message}`, 'event-error');
-        logToConsole('Make sure the API server is running (python api_server.py)', 'event-error');
     }
 }
 
@@ -80,23 +80,15 @@ function setupLogStreaming() {
 // Map log levels to CSS classes
 function getLogClassName(logEntry) {
     const message = logEntry.message.toLowerCase();
-
-    if (message.includes('winner') || message.includes('wins')) {
-        return 'event-winner';
-    } else if (message.includes('flop') || message.includes('turn') ||
+    if (message.includes('winner') || message.includes('wins')) return 'event-winner';
+    if (message.includes('flop') || message.includes('turn') ||
         message.includes('river') || message.includes('showdown') ||
-        message.includes('===')) {
-        return 'event-phase';
-    } else if (message.includes('dealt') || message.includes('deal')) {
-        return 'event-deal';
-    } else if (message.includes('fold') || message.includes('call') ||
+        message.includes('===')) return 'event-phase';
+    if (message.includes('dealt') || message.includes('deal')) return 'event-deal';
+    if (message.includes('fold') || message.includes('call') ||
         message.includes('raise') || message.includes('check') ||
-        message.includes('all-in')) {
-        return 'event-action';
-    } else if (logEntry.level === 'ERROR' || message.includes('error')) {
-        return 'event-error';
-    }
-
+        message.includes('all-in')) return 'event-action';
+    if (logEntry.level === 'ERROR' || message.includes('error')) return 'event-error';
     return '';
 }
 
@@ -117,15 +109,12 @@ function addBotToTable(botId) {
         alert('Cannot add bots while tournament is running');
         return;
     }
-
     if (state.tablePlayers.length >= MAX_PLAYERS) {
         alert(`Maximum ${MAX_PLAYERS} players allowed`);
         return;
     }
 
     const bot = state.availableBots.find(b => b.id === botId);
-
-    // Allow multiple instances - add unique ID with timestamp
     const existingCount = state.tablePlayers.filter(p => p.botId === botId).length;
     const playerId = existingCount > 0 ? `${botId}_${existingCount + 1}` : botId;
     const displayName = existingCount > 0 ? `${bot.name} #${existingCount + 1}` : bot.name;
@@ -143,7 +132,6 @@ function addBotToTable(botId) {
 
     state.tablePlayers.push(player);
 
-    // Initialize stats
     if (!state.statistics[playerId]) {
         state.statistics[playerId] = {
             gamesPlayed: 0,
@@ -152,10 +140,7 @@ function addBotToTable(botId) {
             totalChipsWon: 0,
             totalChipsLost: 0
         };
-        state.chipHistory[playerId] = [{
-            game: 0,
-            chips: STARTING_CHIPS
-        }];
+        state.chipHistory[playerId] = [{ game: 0, chips: STARTING_CHIPS }];
     }
 
     logToConsole(`${bot.name} joined the table`, 'event-action');
@@ -169,23 +154,19 @@ function removeBotFromTable(botId) {
         alert('Cannot remove bots while tournament is running');
         return;
     }
-
     state.tablePlayers = state.tablePlayers.filter(p => p.botId !== botId);
-    logToConsole(`Bot removed from table`, 'event-action');
+    logToConsole('Bot removed from table', 'event-action');
     renderTable();
     updateStatus();
 }
 
 // Clear table
 function clearTable() {
-    if (state.isPlaying && !confirm('Game in progress. Are you sure?')) {
-        return;
-    }
-
+    if (state.isPlaying && !confirm('Game in progress. Are you sure?')) return;
     state.tablePlayers = [];
     state.isPlaying = false;
-    state.isPaused = false;
     state.tournamentInitialized = false;
+    state.handInProgress = false;
     stopGameLoop();
     logToConsole('Table cleared', 'event-action');
     renderTable();
@@ -221,20 +202,21 @@ function renderTable() {
     emptyMessage.style.display = 'none';
     pokerTable.style.display = 'block';
 
-    // Render players
     for (let i = 0; i < MAX_PLAYERS; i++) {
         const seat = document.querySelector(`[data-seat="${i}"]`);
         const player = state.tablePlayers[i];
 
         if (player) {
             const isEliminated = player.chips <= 0;
+            const isFolded = player.folded;
             seat.classList.remove('empty');
             seat.innerHTML = `
-                <div class="player-info ${isEliminated ? 'folded' : ''}">
+                <div class="player-info ${isEliminated ? 'eliminated' : ''} ${isFolded ? 'folded' : ''}">
                     <div class="player-name">${player.name}</div>
                     <div class="player-chips">${player.chips}</div>
                     ${player.bet > 0 ? `<div class="player-bet">Bet: ${player.bet}</div>` : ''}
-                    ${isEliminated ? '<div class="player-bet" style="color: #e24a4a;">ELIMINATED</div>' : ''}
+                    ${isEliminated ? '<div class="player-status eliminated-tag">ELIMINATED</div>' : ''}
+                    ${isFolded && !isEliminated ? '<div class="player-status folded-tag">FOLDED</div>' : ''}
                 </div>
                 <div class="player-cards pos-${i}">
                     ${renderPlayerCards(player)}
@@ -254,27 +236,21 @@ function renderTable() {
         communityCardsEl.innerHTML = '';
     }
 
-    // Update pot
     document.getElementById('potAmount').textContent = `${state.pot || 0}`;
 }
 
 // Render player cards
 function renderPlayerCards(player) {
-    // console.log("Rendering cards for player:", player);
-    if (!player.cards || player.cards.length === 0) {
-        return '';
-    }
+    if (!player.cards || player.cards.length === 0) return '';
     return player.cards.map(card => renderCard(card)).join('');
 }
 
 // Render a card
 function renderCard(card) {
     if (!card) return '';
-
     const suit = card.suit || card.s;
     const value = card.value || card.v || card.rank;
-    const color = (suit === '♥' || suit === '♦') ? 'red' : 'black';
-
+    const color = (suit === '\u2665' || suit === '\u2666') ? 'red' : 'black';
     return `<div class="card ${color}">${value}${suit}</div>`;
 }
 
@@ -288,14 +264,12 @@ async function initializeTournament() {
     try {
         const response = await fetch(`${API_BASE_URL}/tournament/init`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 bots: state.tablePlayers.map(p => ({
                     id: p.botId,
                     name: p.name,
-                    frontendId: p.id  // Send frontend ID for mapping
+                    frontendId: p.id
                 })),
                 starting_chips: STARTING_CHIPS,
                 small_blind: 10,
@@ -308,26 +282,30 @@ async function initializeTournament() {
 
         if (data.success) {
             state.tournamentInitialized = true;
-            logToConsole('Tournament initialized on backend', 'event-phase');
+            logToConsole('Tournament initialized', 'event-phase');
             return true;
         } else {
-            logToConsole(`Failed to initialize tournament: ${data.error}`, 'event-error');
+            logToConsole(`Failed to initialize: ${data.error}`, 'event-error');
             return false;
         }
     } catch (error) {
-        logToConsole(`Error initializing tournament: ${error.message}`, 'event-error');
+        logToConsole(`Error initializing: ${error.message}`, 'event-error');
         return false;
     }
 }
 
-// Step through one hand of the tournament
+// Step through one action of the tournament
 async function stepGame() {
-    if (!state.tournamentInitialized) {
-        const initialized = await initializeTournament();
-        if (!initialized) return;
-    }
+    // Prevent overlapping calls
+    if (state.stepping) return;
+    state.stepping = true;
 
     try {
+        if (!state.tournamentInitialized) {
+            const initialized = await initializeTournament();
+            if (!initialized) { state.stepping = false; return; }
+        }
+
         const response = await fetch(`${API_BASE_URL}/tournament/step`, {
             method: 'POST'
         });
@@ -335,88 +313,181 @@ async function stepGame() {
         const data = await response.json();
 
         if (data.success) {
-            updateFromTournamentState(data.state);
+            handleStepEvent(data);
 
             if (data.complete) {
                 stopGameLoop();
                 state.isPlaying = false;
+                state.handInProgress = false;
                 document.getElementById('playBtn').textContent = 'Play';
                 logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
             }
         } else {
-            logToConsole(`Error stepping game: ${data.error}`, 'event-error');
+            logToConsole(`Error: ${data.error}`, 'event-error');
         }
     } catch (error) {
-        logToConsole(`Error communicating with backend: ${error.message}`, 'event-error');
+        logToConsole(`Backend error: ${error.message}`, 'event-error');
         stopGameLoop();
         state.isPlaying = false;
         document.getElementById('playBtn').textContent = 'Play';
+    } finally {
+        state.stepping = false;
     }
 }
 
-// Update frontend state from backend tournament state
-function updateFromTournamentState(tournamentState) {
-    if (!tournamentState) return;
+// Handle a step event from the backend
+function handleStepEvent(data) {
+    const event = data.event;
 
-    state.gamesPlayed = tournamentState.handNumber;
+    if (event === 'deal') {
+        state.handInProgress = true;
+        // Clear previous hand state
+        state.communityCards = [];
+        state.tablePlayers.forEach(p => { p.folded = false; p.cards = []; p.bet = 0; });
 
-    // Update community cards and pot if provided
-    if (tournamentState.communityCards) {
-        state.communityCards = tournamentState.communityCards;
-    }
-    if (tournamentState.pot !== undefined) {
-        state.pot = tournamentState.pot;
-    }
-
-    // Update player chips
-    for (const backendPlayer of tournamentState.players) {
-        const coreId = backendPlayer.id.split('_')[0];
-
-        const frontendPlayer = state.tablePlayers.find(p =>
-            p.id === backendPlayer.id || p.id === coreId
-        );
-
-
-        if (frontendPlayer) {
-            const prevChips = frontendPlayer.chips;
-            frontendPlayer.chips = backendPlayer.chips;
-
-            // Update cards if provided
-            if (backendPlayer.cards) {
-                frontendPlayer.cards = backendPlayer.cards;
-            }
-            if (backendPlayer.bet !== undefined) {
-                frontendPlayer.bet = backendPlayer.bet;
-            }
-
-            // Update statistics
-            const stats = state.statistics[frontendPlayer.id];
-            if (stats) {
-                const chipDelta = backendPlayer.chips - prevChips;
-
-                if (chipDelta > 0) {
-                    stats.wins++;
-                    stats.totalChipsWon += chipDelta;
-                } else if (chipDelta < 0) {
-                    stats.totalChipsLost += Math.abs(chipDelta);
-                }
-
-                stats.gamesPlayed++;
-                stats.winRate = stats.gamesPlayed > 0 ?
-                    (stats.wins / stats.gamesPlayed * 100).toFixed(1) : 0;
-
-                // Update chip history
-                state.chipHistory[frontendPlayer.id].push({
-                    game: state.gamesPlayed,
-                    chips: backendPlayer.chips
-                });
+        // Set hole cards
+        if (data.playerCards) {
+            for (const [pid, cards] of Object.entries(data.playerCards)) {
+                const player = findPlayer(pid);
+                if (player) player.cards = cards;
             }
         }
+
+        // Update chips and bets
+        syncChipsAndBets(data);
+        state.pot = data.pot || 0;
+        logToConsole(`--- NEW HAND (${data.phase}) ---`, 'event-phase');
+
+    } else if (event === 'action') {
+        const actionStr = formatAction(data.player, data.action, data.amount);
+        logToConsole(actionStr, 'event-action');
+
+        // Mark folded players
+        if (data.action === 'fold') {
+            const player = findPlayer(data.player);
+            if (player) player.folded = true;
+        }
+
+        syncChipsAndBets(data);
+        state.pot = data.pot || 0;
+
+    } else if (event === 'community') {
+        state.communityCards = data.communityCards || [];
+        state.pot = data.pot || 0;
+        syncChipsAndBets(data);
+        logToConsole(`--- ${data.phase.toUpperCase()}: ${formatCommunityCards(state.communityCards)} ---`, 'event-phase');
+
+    } else if (event === 'showdown') {
+        state.communityCards = data.communityCards || [];
+        state.pot = 0;
+
+        // Show all hands at showdown
+        if (data.playerHands) {
+            for (const [pid, cards] of Object.entries(data.playerHands)) {
+                const player = findPlayer(pid);
+                if (player) player.cards = cards;
+            }
+        }
+
+        const winners = data.winners || [];
+        logToConsole(`WINNERS: ${winners.join(', ')}`, 'event-winner');
+
+        // Update chips from showdown
+        if (data.playerChips) {
+            for (const [pid, chips] of Object.entries(data.playerChips)) {
+                const player = findPlayer(pid);
+                if (player) {
+                    const prevChips = player.chips;
+                    player.chips = chips;
+
+                    // Update statistics
+                    const stats = state.statistics[player.id];
+                    if (stats) {
+                        const delta = chips - prevChips;
+                        if (delta > 0) {
+                            stats.wins++;
+                            stats.totalChipsWon += delta;
+                        } else if (delta < 0) {
+                            stats.totalChipsLost += Math.abs(delta);
+                        }
+                        stats.gamesPlayed++;
+                        stats.winRate = stats.gamesPlayed > 0
+                            ? (stats.wins / stats.gamesPlayed * 100).toFixed(1) : 0;
+
+                        state.chipHistory[player.id].push({
+                            game: state.gamesPlayed + 1,
+                            chips: chips
+                        });
+                    }
+                }
+            }
+        }
+
+        state.gamesPlayed++;
+        state.handInProgress = false;
+
+        // Clear bets
+        state.tablePlayers.forEach(p => { p.bet = 0; });
+
+        renderStatistics();
+    }
+
+    // Always sync tournament-level state
+    if (data.state) {
+        syncTournamentState(data.state);
     }
 
     renderTable();
     updateStatus();
-    renderStatistics();
+}
+
+// Helpers
+function findPlayer(pid) {
+    const coreId = pid.includes('_') ? pid.split('_')[0] : pid;
+    return state.tablePlayers.find(p => p.id === pid || p.id === coreId);
+}
+
+function syncChipsAndBets(data) {
+    if (data.playerChips) {
+        for (const [pid, chips] of Object.entries(data.playerChips)) {
+            const player = findPlayer(pid);
+            if (player) player.chips = chips;
+        }
+    }
+    if (data.playerBets) {
+        for (const [pid, bet] of Object.entries(data.playerBets)) {
+            const player = findPlayer(pid);
+            if (player) player.bet = bet;
+        }
+    }
+}
+
+function syncTournamentState(ts) {
+    // Sync eliminations from tournament state
+    if (ts.players) {
+        for (const bp of ts.players) {
+            const player = findPlayer(bp.id);
+            if (player && bp.isEliminated) {
+                player.chips = 0;
+            }
+        }
+    }
+}
+
+function formatAction(player, action, amount) {
+    const name = player.replace(/_/g, ' ');
+    switch (action) {
+        case 'fold': return `${name} folds`;
+        case 'check': return `${name} checks`;
+        case 'call': return `${name} calls`;
+        case 'raise': return `${name} raises to ${amount}`;
+        case 'all_in': return `${name} goes ALL-IN`;
+        default: return `${name}: ${action}`;
+    }
+}
+
+function formatCommunityCards(cards) {
+    return cards.map(c => `${c.value}${c.suit}`).join(' ');
 }
 
 // Toggle play/pause
@@ -438,9 +509,10 @@ async function togglePlay() {
     }
 }
 
-// Start game loop
+// Start game loop - fast stepping
 function startGameLoop() {
-    const interval = 2000 / state.speed; // Minimum 2 seconds per hand
+    stopGameLoop();
+    const interval = Math.max(150, 2000 / state.speed);
     state.gameInterval = setInterval(stepGame, interval);
 }
 
@@ -469,47 +541,39 @@ function changeSpeed(delta) {
 
 // Reset game
 async function resetGame() {
-    if (state.isPlaying && !confirm('Game in progress. Are you sure?')) {
-        return;
-    }
+    if (state.isPlaying && !confirm('Game in progress. Are you sure?')) return;
 
     state.isPlaying = false;
+    state.handInProgress = false;
     stopGameLoop();
 
     try {
-        await fetch(`${API_BASE_URL}/tournament/reset`, {
-            method: 'POST'
-        });
+        await fetch(`${API_BASE_URL}/tournament/reset`, { method: 'POST' });
     } catch (error) {
-        // Ignore errors on reset
+        // Ignore
     }
 
     state.tournamentInitialized = false;
     state.gamesPlayed = 0;
+    state.communityCards = [];
+    state.pot = 0;
 
-    // Reset frontend state
     state.tablePlayers.forEach(player => {
         player.chips = STARTING_CHIPS;
         player.bet = 0;
         player.folded = false;
+        player.cards = [];
     });
 
-    // Reset statistics
     for (const playerId in state.statistics) {
         state.statistics[playerId] = {
-            gamesPlayed: 0,
-            wins: 0,
-            winRate: 0,
-            totalChipsWon: 0,
-            totalChipsLost: 0
+            gamesPlayed: 0, wins: 0, winRate: 0,
+            totalChipsWon: 0, totalChipsLost: 0
         };
-        state.chipHistory[playerId] = [{
-            game: 0,
-            chips: STARTING_CHIPS
-        }];
+        state.chipHistory[playerId] = [{ game: 0, chips: STARTING_CHIPS }];
     }
 
-    logToConsole('Game reset - all chips restored to starting amount', 'event-action');
+    logToConsole('Game reset', 'event-action');
     document.getElementById('playBtn').textContent = 'Play';
     renderTable();
     updateStatus();
@@ -522,11 +586,8 @@ function updateStatus() {
     document.getElementById('gamesPlayed').textContent = state.gamesPlayed;
 
     let status = 'Ready';
-    if (state.isPlaying) {
-        status = 'Playing';
-    } else if (state.tablePlayers.length < MIN_PLAYERS) {
-        status = `Need ${MIN_PLAYERS - state.tablePlayers.length} more player(s)`;
-    }
+    if (state.isPlaying) status = 'Playing';
+    else if (state.tablePlayers.length < MIN_PLAYERS) status = `Need ${MIN_PLAYERS - state.tablePlayers.length} more player(s)`;
     document.getElementById('gameStatus').textContent = status;
 }
 
@@ -534,41 +595,45 @@ function updateStatus() {
 function renderStatistics() {
     const statsGrid = document.getElementById('statsGrid');
 
-    let html = '';
-    state.tablePlayers.forEach(player => {
-        const stats = state.statistics[player.id];
-        html += `
-            <div class="stat-card">
-                <h3>${player.name}</h3>
-                <div class="stat-item">
-                    <span class="stat-label">Games Played</span>
-                    <span class="stat-value">${stats.gamesPlayed}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Wins</span>
-                    <span class="stat-value">${stats.wins}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Win Rate</span>
-                    <span class="stat-value">${stats.winRate}%</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Current Chips</span>
-                    <span class="stat-value">${player.chips}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Total Won</span>
-                    <span class="stat-value" style="color: #4a90e2;">+${stats.totalChipsWon}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Total Lost</span>
-                    <span class="stat-value" style="color: #e24a4a;">-${stats.totalChipsLost}</span>
-                </div>
-            </div>
-        `;
-    });
+    if (state.tablePlayers.length === 0) {
+        statsGrid.innerHTML = '<p class="stats-empty">Add players to see statistics</p>';
+        drawChipsChart();
+        return;
+    }
 
-    statsGrid.innerHTML = html || '<p style="color: #666;">Add players to see statistics</p>';
+    // Build a table for all players
+    const rows = state.tablePlayers.map(player => {
+        const stats = state.statistics[player.id];
+        const isEliminated = player.chips <= 0;
+        return `
+            <tr class="${isEliminated ? 'stats-row-eliminated' : ''}">
+                <td class="stats-cell-name">${player.name}</td>
+                <td>${stats.gamesPlayed}</td>
+                <td>${stats.wins}</td>
+                <td>${stats.winRate}%</td>
+                <td class="stats-cell-chips">${player.chips}</td>
+                <td class="stats-cell-won">+${stats.totalChipsWon}</td>
+                <td class="stats-cell-lost">-${stats.totalChipsLost}</td>
+            </tr>
+        `;
+    }).join('');
+
+    statsGrid.innerHTML = `
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Hands</th>
+                    <th>Wins</th>
+                    <th>Win Rate</th>
+                    <th>Chips</th>
+                    <th>Won</th>
+                    <th>Lost</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
 
     drawChipsChart();
 }
@@ -597,9 +662,7 @@ function drawChipsChart() {
 
     state.tablePlayers.forEach(player => {
         const history = state.chipHistory[player.id];
-        history.forEach(point => {
-            maxChips = Math.max(maxChips, point.chips);
-        });
+        if (history) history.forEach(point => { maxChips = Math.max(maxChips, point.chips); });
     });
 
     // Draw axes
@@ -643,7 +706,7 @@ function drawChipsChart() {
 
     state.tablePlayers.forEach((player, idx) => {
         const history = state.chipHistory[player.id];
-        if (history.length === 0) return;
+        if (!history || history.length === 0) return;
 
         ctx.strokeStyle = colors[idx % colors.length];
         ctx.lineWidth = 2;
@@ -652,12 +715,8 @@ function drawChipsChart() {
         history.forEach((point, i) => {
             const x = padding + (chartWidth / maxGames) * point.game;
             const y = canvas.height - padding - (chartHeight * point.chips / maxChips);
-
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
         });
 
         ctx.stroke();
@@ -673,7 +732,6 @@ function drawChipsChart() {
         ctx.fillText(player.name, legendX + 18, legendY + 4);
     });
 
-    // Chart labels
     ctx.fillStyle = '#4a90e2';
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'left';
@@ -715,7 +773,7 @@ function initSidebarResize(e) {
 
 function resizeSidebar(e) {
     const newWidth = e.clientX;
-    if (newWidth > 10 && newWidth < 500) { // min/max width
+    if (newWidth > 10 && newWidth < 500) {
         sidebar.style.width = newWidth + 'px';
     }
 }
@@ -740,7 +798,7 @@ function initConsoleResize(e) {
 function resizeConsole(e) {
     const containerHeight = document.querySelector('.main-content').clientHeight;
     const newHeight = containerHeight - e.clientY;
-    if (newHeight > 20 && newHeight < 500) { // min/max height
+    if (newHeight > 20 && newHeight < 500) {
         consoleEl.style.height = newHeight + 'px';
     }
 }

@@ -27,6 +27,7 @@ from backend.tournament_runner import TournamentRunner, TournamentSettings, Tour
 from backend.bot_manager import BotManager
 from backend.engine.poker_game import PokerGame, PlayerAction
 from backend.tournament import PokerTournament
+from backend.engine.cards import Card
 
 # Import security systems
 from secure_admin_auth import AdminAuthSystem, User
@@ -89,7 +90,13 @@ tournament_state = {
     'current_game': None,
     'bot_manager': None,
     'log_queue': Queue(),
-    'settings': None
+    'settings': None,
+    # Step-by-step hand state
+    'hand_phase': None,       # None, 'preflop', 'flop', 'turn', 'river', 'showdown', 'done'
+    'active_game': None,      # Current PokerGame instance (persists across steps)
+    'active_table_id': None,  # Which table is currently being played
+    'pending_tables': [],     # Tables still needing to play this hand
+    'action_queue': [],       # Queued action results to send to frontend
 }
 
 state_lock = Lock()
@@ -512,19 +519,35 @@ def get_audit_log():
 # TOURNAMENT ROUTES - Use approved bots from storage
 # ============================================================================
 
+def serialize_card(card):
+    """Convert a Card object to a JSON-serializable dict"""
+    rank_str = {2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8",
+                9: "9", 10: "10", 11: "J", 12: "Q", 13: "K", 14: "A"}
+    return {'value': rank_str[card.rank.value], 'suit': card.suit.value}
+
+
+def _clear_hand_state():
+    """Reset the step-by-step hand state"""
+    tournament_state['hand_phase'] = None
+    tournament_state['active_game'] = None
+    tournament_state['active_table_id'] = None
+    tournament_state['pending_tables'] = []
+    tournament_state['action_queue'] = []
+
+
 @app.route('/api/tournament/init', methods=['POST'])
 def initialize_tournament():
     """Initialize a new tournament with APPROVED bots only"""
     try:
         data = request.json
         selected_bot_names = data.get('bots', [])
-        
+
         if len(selected_bot_names) < 2:
             return jsonify({
                 'success': False,
                 'error': 'Need at least 2 bots to start a tournament'
             }), 400
-        
+
         with state_lock:
             # Create settings
             settings = TournamentSettings(
@@ -536,45 +559,45 @@ def initialize_tournament():
                 blind_increase_interval=data.get('blind_increase_interval', 10),
                 blind_increase_factor=1.5
             )
-            
+
             tournament_state['settings'] = settings
-            
+
             # Create bot manager
             from backend.bot_manager import BotWrapper
             bot_manager = BotManager("players", 10.0)
             bot_manager.bots = {}  # Clear, we'll load from storage
-            
+
             # Load approved bots from encrypted storage
             player_names = []
             bot_count = {}
-            
+
             for bot_data in selected_bot_names:
                 # Handle both string and dict formats
                 if isinstance(bot_data, dict):
                     bot_name = bot_data.get('id') or bot_data.get('name')
                 else:
                     bot_name = bot_data
-                
+
                 # Skip if bot_name is None or empty
                 if not bot_name:
                     logging.warning("Skipping bot with invalid name")
                     continue
-                
+
                 # Load bot from encrypted storage using master password
                 if MASTER_PASSWORD is None:
                     logging.error("MASTER_PASSWORD not set")
                     continue
                 bot_instance = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
-                
+
                 if bot_instance is None:
                     logging.warning(f"Failed to load bot: {bot_name}")
                     continue
-                
+
                 # Handle duplicates (same bot multiple times)
                 if bot_name not in bot_count:
                     bot_count[bot_name] = 0
                 bot_count[bot_name] += 1
-                
+
                 # Create unique player name for duplicates
                 if bot_count[bot_name] > 1:
                     player_name = f"{bot_name}_{bot_count[bot_name]}"
@@ -583,38 +606,39 @@ def initialize_tournament():
                 else:
                     player_name = bot_name
                     unique_bot = bot_instance
-                
+
                 player_names.append(player_name)
-                
+
                 # Wrap bot for safety and timeout handling
                 bot_wrapper = BotWrapper(player_name, unique_bot, 10.0)
                 bot_manager.bots[player_name] = bot_wrapper
-            
+
             if len(player_names) < 2:
                 return jsonify({
                     'success': False,
                     'error': 'Failed to load enough bots'
                 }), 400
-            
+
             tournament_state['bot_manager'] = bot_manager
-            
+
             # Create tournament
             tournament = PokerTournament(player_names, settings)
             tournament_state['tournament'] = tournament
             tournament_state['is_running'] = False
             tournament_state['is_paused'] = False
-            
+            _clear_hand_state()
+
             # Clear log queue
             while not tournament_state['log_queue'].empty():
                 tournament_state['log_queue'].get()
-            
+
             logging.info(f"Tournament initialized with {len(player_names)} bots")
-        
+
         return jsonify({
             'success': True,
             'message': f'Tournament initialized with {len(player_names)} bots'
         })
-        
+
     except Exception as e:
         import traceback
         logging.error(f"Error initializing tournament: {str(e)}")
@@ -627,86 +651,326 @@ def initialize_tournament():
 
 @app.route('/api/tournament/step', methods=['POST'])
 def step_tournament():
-    """Execute one hand of the tournament"""
+    """Step through the tournament one action at a time.
+
+    Each call returns one 'event':
+      - 'deal': hole cards dealt, blinds posted (start of hand)
+      - 'action': a single player action (fold/check/call/raise/all-in)
+      - 'community': new community cards revealed (flop/turn/river)
+      - 'showdown': hand result with winners
+      - 'hand_complete': tournament state updated, ready for next hand
+    """
     try:
         with state_lock:
             tournament = tournament_state['tournament']
             bot_manager = tournament_state['bot_manager']
-            
+
             if not tournament:
                 return jsonify({
                     'success': False,
                     'error': 'Tournament not initialized'
                 }), 400
-            
+
             if tournament.is_tournament_complete():
-                # Update bot statistics in storage
                 final_results = tournament.get_final_results()
                 for bot_name, chips, position in final_results:
-                    # Remove instance number suffix if present
                     base_name = bot_name.split('_')[0] if '_' in bot_name else bot_name
                     won = position == 1
                     bot_storage.update_bot_stats(base_name, won)
-                
+
                 return jsonify({
                     'success': True,
                     'complete': True,
+                    'event': 'tournament_complete',
                     'state': get_tournament_state_dict(tournament)
                 })
-            
-            # Play one round
-            active_tables = {tid: table for tid, table in tournament.tables.items() 
-                           if len(table.get_active_players()) >= 2}
-            
-            for table_id, table in active_tables.items():
+
+            game = tournament_state['active_game']
+
+            # === No active hand: start a new one ===
+            if game is None:
+                active_tables = {tid: table for tid, table in tournament.tables.items()
+                               if len(table.get_active_players()) >= 2}
+
+                if not active_tables:
+                    return jsonify({
+                        'success': True,
+                        'complete': True,
+                        'event': 'tournament_complete',
+                        'state': get_tournament_state_dict(tournament)
+                    })
+
+                # Pick first table to play
+                table_id = list(active_tables.keys())[0]
+                table = active_tables[table_id]
+                tournament_state['pending_tables'] = list(active_tables.keys())[1:]
+                tournament_state['active_table_id'] = table_id
+
                 player_ids = table.get_active_players()
-                if len(player_ids) >= 2:
-                    small_blind, big_blind = table.get_current_blinds()
-                    
-                    bots = {pid: bot_manager.get_bot(pid) for pid in player_ids}
-                    
-                    game = PokerGame(bots,
-                                   starting_chips=0,
-                                   small_blind=small_blind,
-                                   big_blind=big_blind,
-                                   dealer_button_index=table.dealer_button % len(player_ids))
-                    
-                    # Set chip counts
-                    for player in player_ids:
-                        game.player_chips[player] = tournament.player_stats[player].chips
-                    
-                    # Play hand
-                    final_chips = game.play_hand()
-                    
-                    # Check for disqualified bots
-                    for player_id in list(final_chips.keys()):
-                        bot = bot_manager.get_bot(player_id)
-                        if bot and bot.is_disqualified():
-                            final_chips[player_id] = 0
-                    
-                    # Update tournament
-                    for player_id, chips in final_chips.items():
-                        tournament.update_player_chips(player_id, chips)
-                    
-                    tournament.tables[table_id].dealer_button = game.dealer_button
-            
-            # Advance tournament
-            tournament.advance_hand()
-            
-            # Rebalance if needed
-            if tournament.should_rebalance_tables():
-                tournament.rebalance_tables()
-        
-        return jsonify({
-            'success': True,
-            'complete': tournament.is_tournament_complete(),
-            'state': get_tournament_state_dict(tournament)
-        })
-        
+                small_blind, big_blind = table.get_current_blinds()
+                bots = {pid: bot_manager.get_bot(pid) for pid in player_ids}
+
+                game = PokerGame(bots,
+                               starting_chips=0,
+                               small_blind=small_blind,
+                               big_blind=big_blind,
+                               dealer_button_index=table.dealer_button % len(player_ids))
+
+                for player in player_ids:
+                    game.player_chips[player] = tournament.player_stats[player].chips
+
+                # Start the hand (deal cards, post blinds)
+                game.reset_hand()
+                game.deal_hole_cards()
+                game.post_blinds()
+                game._start_betting_round()
+
+                tournament_state['active_game'] = game
+                tournament_state['hand_phase'] = 'preflop'
+
+                # Return deal event with hole cards and blinds
+                player_cards = {}
+                for pid in game.active_players:
+                    hand = game.get_player_hand(pid)
+                    if hand:
+                        player_cards[pid] = [serialize_card(c) for c in hand.cards]
+
+                return jsonify({
+                    'success': True,
+                    'complete': False,
+                    'event': 'deal',
+                    'phase': 'preflop',
+                    'playerCards': player_cards,
+                    'pot': game.pot,
+                    'playerChips': game.player_chips.copy(),
+                    'playerBets': game.player_bets.copy(),
+                    'communityCards': [],
+                    'state': get_tournament_state_dict(tournament)
+                })
+
+            # === Active hand: process next action ===
+            phase = tournament_state['hand_phase']
+
+            # Check if only one player left (everyone else folded)
+            if len(game.active_players) <= 1:
+                # Skip to showdown
+                tournament_state['hand_phase'] = 'showdown'
+                phase = 'showdown'
+
+            # If betting round is complete, advance to next phase
+            if phase != 'showdown' and game.is_betting_round_complete():
+                if phase == 'preflop':
+                    game.deal_flop()
+                    game.round_name = 'flop'
+                    tournament_state['hand_phase'] = 'flop'
+                    if len(game.active_players) > 1:
+                        game._start_betting_round()
+
+                    return jsonify({
+                        'success': True,
+                        'complete': False,
+                        'event': 'community',
+                        'phase': 'flop',
+                        'communityCards': [serialize_card(c) for c in game.community_cards],
+                        'pot': game.pot,
+                        'playerChips': game.player_chips.copy(),
+                        'playerBets': game.player_bets.copy(),
+                        'state': get_tournament_state_dict(tournament)
+                    })
+
+                elif phase == 'flop':
+                    game.deal_turn()
+                    game.round_name = 'turn'
+                    tournament_state['hand_phase'] = 'turn'
+                    if len(game.active_players) > 1:
+                        game._start_betting_round()
+
+                    return jsonify({
+                        'success': True,
+                        'complete': False,
+                        'event': 'community',
+                        'phase': 'turn',
+                        'communityCards': [serialize_card(c) for c in game.community_cards],
+                        'pot': game.pot,
+                        'playerChips': game.player_chips.copy(),
+                        'playerBets': game.player_bets.copy(),
+                        'state': get_tournament_state_dict(tournament)
+                    })
+
+                elif phase == 'turn':
+                    game.deal_river()
+                    game.round_name = 'river'
+                    tournament_state['hand_phase'] = 'river'
+                    if len(game.active_players) > 1:
+                        game._start_betting_round()
+
+                    return jsonify({
+                        'success': True,
+                        'complete': False,
+                        'event': 'community',
+                        'phase': 'river',
+                        'communityCards': [serialize_card(c) for c in game.community_cards],
+                        'pot': game.pot,
+                        'playerChips': game.player_chips.copy(),
+                        'playerBets': game.player_bets.copy(),
+                        'state': get_tournament_state_dict(tournament)
+                    })
+
+                elif phase == 'river':
+                    tournament_state['hand_phase'] = 'showdown'
+                    phase = 'showdown'
+
+            # === Showdown ===
+            if phase == 'showdown':
+                if len(game.active_players) > 1:
+                    winners = game.determine_winners()
+                    game._distribute_pot(winners)
+                else:
+                    winners = game.active_players.copy()
+                    game._distribute_pot(winners)
+
+                game.dealer_button = (game.dealer_button + 1) % len(game.player_ids)
+
+                # Check for disqualified bots
+                for player_id in list(game.player_chips.keys()):
+                    bot = bot_manager.get_bot(player_id)
+                    if bot and bot.is_disqualified():
+                        game.player_chips[player_id] = 0
+
+                # Update tournament chips
+                table_id = tournament_state['active_table_id']
+                for player_id, chips in game.player_chips.items():
+                    tournament.update_player_chips(player_id, chips)
+                tournament.tables[table_id].dealer_button = game.dealer_button
+
+                # Build showdown result with player hands
+                showdown_hands = {}
+                for pid in game.player_ids:
+                    hand = game.get_player_hand(pid)
+                    if hand:
+                        showdown_hands[pid] = [serialize_card(c) for c in hand.cards]
+
+                # Check if more tables need to play
+                pending = tournament_state['pending_tables']
+                if pending:
+                    # More tables: start next table on next step call
+                    next_table_id = pending.pop(0)
+                    tournament_state['pending_tables'] = pending
+                    tournament_state['active_game'] = None  # Will init next table on next call
+                    # But first set up for next table
+                    table = tournament.tables.get(next_table_id)
+                    if table and len(table.get_active_players()) >= 2:
+                        tournament_state['active_table_id'] = next_table_id
+                    else:
+                        tournament_state['active_table_id'] = None
+
+                    return jsonify({
+                        'success': True,
+                        'complete': False,
+                        'event': 'showdown',
+                        'winners': winners,
+                        'playerChips': game.player_chips.copy(),
+                        'playerHands': showdown_hands,
+                        'communityCards': [serialize_card(c) for c in game.community_cards],
+                        'pot': 0,
+                        'state': get_tournament_state_dict(tournament)
+                    })
+
+                # All tables done - advance hand
+                tournament.advance_hand()
+                if tournament.should_rebalance_tables():
+                    tournament.rebalance_tables()
+
+                _clear_hand_state()
+
+                return jsonify({
+                    'success': True,
+                    'complete': tournament.is_tournament_complete(),
+                    'event': 'showdown',
+                    'winners': winners,
+                    'playerChips': game.player_chips.copy(),
+                    'playerHands': showdown_hands,
+                    'communityCards': [serialize_card(c) for c in game.community_cards],
+                    'pot': 0,
+                    'state': get_tournament_state_dict(tournament)
+                })
+
+            # === Normal betting action ===
+            player_id = game.get_current_player()
+            if not player_id:
+                # No valid player, force round complete
+                tournament_state['hand_phase'] = 'showdown'
+                return jsonify({
+                    'success': True,
+                    'complete': False,
+                    'event': 'waiting',
+                    'state': get_tournament_state_dict(tournament)
+                })
+
+            # Skip all-in players (they can't act)
+            if game.player_chips[player_id] == 0:
+                game.advance_to_next_player()
+                return jsonify({
+                    'success': True,
+                    'complete': False,
+                    'event': 'skip',
+                    'player': player_id,
+                    'reason': 'all-in',
+                    'state': get_tournament_state_dict(tournament)
+                })
+
+            # Get bot action
+            bot = game.player_bots[player_id]
+            game_state = game.get_game_state()
+            player_hand = game.get_player_hand(player_id)
+            legal_actions = game.get_legal_actions(game_state, player_id)
+            min_bet = game_state.min_bet
+            max_bet = game.player_chips[player_id] + game.player_bets[player_id]
+
+            if player_hand is None:
+                game.process_action(player_id, PlayerAction.FOLD, 0)
+                game.advance_to_next_player()
+                return jsonify({
+                    'success': True,
+                    'complete': False,
+                    'event': 'action',
+                    'player': player_id,
+                    'action': 'fold',
+                    'amount': 0,
+                    'pot': game.pot,
+                    'playerChips': game.player_chips.copy(),
+                    'playerBets': game.player_bets.copy(),
+                    'phase': tournament_state['hand_phase'],
+                    'state': get_tournament_state_dict(tournament)
+                })
+
+            action, amount = bot.get_action(game_state, player_hand.cards, legal_actions, min_bet, max_bet)
+            game.process_action(player_id, action, amount)
+            game.advance_to_next_player()
+
+            action_name = action.name.lower()
+
+            return jsonify({
+                'success': True,
+                'complete': False,
+                'event': 'action',
+                'player': player_id,
+                'action': action_name,
+                'amount': amount,
+                'pot': game.pot,
+                'playerChips': game.player_chips.copy(),
+                'playerBets': game.player_bets.copy(),
+                'communityCards': [serialize_card(c) for c in game.community_cards],
+                'phase': tournament_state['hand_phase'],
+                'state': get_tournament_state_dict(tournament)
+            })
+
     except Exception as e:
         logging.error(f"Error in step_tournament: {str(e)}")
         import traceback
         logging.error(traceback.format_exc())
+        # Clear broken hand state so next step starts fresh
+        _clear_hand_state()
         return jsonify({
             'success': False,
             'error': 'Tournament step failed'
@@ -719,16 +983,33 @@ def get_tournament_state():
     try:
         with state_lock:
             tournament = tournament_state['tournament']
-            
+
             if not tournament:
                 return jsonify({
                     'success': False,
                     'error': 'Tournament not initialized'
                 }), 400
-            
+
+            game = tournament_state['active_game']
+            result = get_tournament_state_dict(tournament)
+
+            # Include live hand state if mid-hand
+            if game:
+                result['communityCards'] = [serialize_card(c) for c in game.community_cards]
+                result['pot'] = game.pot
+                for p in result['players']:
+                    pid = p['id']
+                    if pid in game.player_chips:
+                        p['chips'] = game.player_chips[pid]
+                    if pid in game.player_bets:
+                        p['bet'] = game.player_bets[pid]
+                    hand = game.get_player_hand(pid)
+                    if hand:
+                        p['cards'] = [serialize_card(c) for c in hand.cards]
+
             return jsonify({
                 'success': True,
-                'state': get_tournament_state_dict(tournament)
+                'state': result
             })
     except Exception as e:
         logging.error(f"Error getting tournament state: {str(e)}")
@@ -761,7 +1042,8 @@ def reset_tournament():
             tournament_state['is_running'] = False
             tournament_state['is_paused'] = False
             tournament_state['current_game'] = None
-            
+            _clear_hand_state()
+
             # Clear logs
             while not tournament_state['log_queue'].empty():
                 tournament_state['log_queue'].get()
