@@ -633,7 +633,8 @@ def initialize_tournament():
             while not tournament_state['log_queue'].empty():
                 tournament_state['log_queue'].get()
 
-            logging.info(f"Tournament initialized with {len(player_names)} bots")
+            logging.info(f"Tournament initialized with {len(player_names)} bots "
+                        f"(dict id={id(tournament_state)}, tournament={tournament_state['tournament'] is not None})")
 
         return jsonify({
             'success': True,
@@ -667,6 +668,9 @@ def step_tournament():
             bot_manager = tournament_state['bot_manager']
 
             if not tournament:
+                logging.error(f"Step called but tournament is None! "
+                             f"bot_manager={bot_manager is not None}, "
+                             f"id(tournament_state)={id(tournament_state)}")
                 return jsonify({
                     'success': False,
                     'error': 'Tournament not initialized'
@@ -1155,4 +1159,4 @@ if __name__ == '__main__':
     else:
         print("🔧 DEVELOPMENT MODE")
         print("   For production, set: FLASK_ENV=production")
-        app.run(host='0.0.0.0', port=5000, debug=True, threaded=True, use_reloader=False)
+        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

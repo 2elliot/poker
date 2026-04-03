@@ -323,12 +323,14 @@ async function stepGame() {
                 logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
             }
         } else {
-            // If backend lost the tournament (e.g. server restart), re-initialize
+            logToConsole(`Error: ${data.error}`, 'event-error');
+            // If backend lost the tournament (e.g. server restart), reset frontend state
             if (data.error && data.error.includes('not initialized')) {
-                logToConsole('Backend lost tournament state, re-initializing...', 'event-error');
+                logToConsole('Server lost tournament state. Click Reset then Play to restart.', 'event-error');
+                stopGameLoop();
+                state.isPlaying = false;
                 state.tournamentInitialized = false;
-            } else {
-                logToConsole(`Error: ${data.error}`, 'event-error');
+                document.getElementById('playBtn').textContent = 'Play';
             }
         }
     } catch (error) {
