@@ -583,7 +583,10 @@ def _build_tournament(init_config):
 
         if bot_count[bot_name] > 1:
             player_name = f"{bot_name}_{bot_count[bot_name]}"
-            unique_bot = bot_instance.__class__(player_name)
+            unique_bot = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
+            if unique_bot is None:
+                continue
+            unique_bot.name = player_name
         else:
             player_name = bot_name
             unique_bot = bot_instance
