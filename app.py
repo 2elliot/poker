@@ -533,6 +533,7 @@ def _clear_hand_state():
     tournament_state['active_table_id'] = None
     tournament_state['pending_tables'] = []
     tournament_state['action_queue'] = []
+    tournament_state['stats_recorded'] = False
 
 
 @app.route('/api/tournament/init', methods=['POST'])
@@ -672,11 +673,14 @@ def step_tournament():
                 }), 400
 
             if tournament.is_tournament_complete():
-                final_results = tournament.get_final_results()
-                for bot_name, chips, position in final_results:
-                    base_name = bot_name.split('_')[0] if '_' in bot_name else bot_name
-                    won = position == 1
-                    bot_storage.update_bot_stats(base_name, won)
+                # Only update stats once (not on every repeated step call)
+                if not tournament_state.get('stats_recorded'):
+                    tournament_state['stats_recorded'] = True
+                    final_results = tournament.get_final_results()
+                    for bot_name, chips, position in final_results:
+                        base_name = bot_name.split('_')[0] if '_' in bot_name else bot_name
+                        won = position == 1
+                        bot_storage.update_bot_stats(base_name, won)
 
                 return jsonify({
                     'success': True,
@@ -1151,4 +1155,4 @@ if __name__ == '__main__':
     else:
         print("🔧 DEVELOPMENT MODE")
         print("   For production, set: FLASK_ENV=production")
-        app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
+        app.run(host='0.0.0.0', port=5000, debug=True, threaded=True, use_reloader=False)

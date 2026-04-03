@@ -323,7 +323,13 @@ async function stepGame() {
                 logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
             }
         } else {
-            logToConsole(`Error: ${data.error}`, 'event-error');
+            // If backend lost the tournament (e.g. server restart), re-initialize
+            if (data.error && data.error.includes('not initialized')) {
+                logToConsole('Backend lost tournament state, re-initializing...', 'event-error');
+                state.tournamentInitialized = false;
+            } else {
+                logToConsole(`Error: ${data.error}`, 'event-error');
+            }
         }
     } catch (error) {
         logToConsole(`Backend error: ${error.message}`, 'event-error');
