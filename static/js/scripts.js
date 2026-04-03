@@ -143,7 +143,7 @@ function addBotToTable(botId) {
         state.chipHistory[playerId] = [{ game: 0, chips: STARTING_CHIPS }];
     }
 
-    logToConsole(`${bot.name} joined the table`, 'event-action');
+    logToConsole(`${displayName} joined the table`, 'event-action');
     renderTable();
     updateStatus();
 }
@@ -397,7 +397,10 @@ function handleStepEvent(data) {
             }
         }
 
-        const winners = data.winners || [];
+        const winners = (data.winners || []).map(w => {
+            const p = findPlayer(w);
+            return p ? p.name : w;
+        });
         logToConsole(`WINNERS: ${winners.join(', ')}`, 'event-winner');
 
         // Update chips from showdown
@@ -451,8 +454,12 @@ function handleStepEvent(data) {
 
 // Helpers
 function findPlayer(pid) {
-    const coreId = pid.includes('_') ? pid.split('_')[0] : pid;
-    return state.tablePlayers.find(p => p.id === pid || p.id === coreId);
+    // Try exact match first
+    const exact = state.tablePlayers.find(p => p.id === pid);
+    if (exact) return exact;
+    // Fallback: strip only a trailing _N suffix (not underscores within the name)
+    const fallback = pid.replace(/_(\d+)$/, '');
+    return state.tablePlayers.find(p => p.id === fallback);
 }
 
 function syncChipsAndBets(data) {
@@ -483,7 +490,8 @@ function syncTournamentState(ts) {
 }
 
 function formatAction(player, action, amount) {
-    const name = player.replace(/_/g, ' ');
+    const p = findPlayer(player);
+    const name = p ? p.name : player.replace(/_(\d+)$/, ' $1');
     switch (action) {
         case 'fold': return `${name} folds`;
         case 'check': return `${name} checks`;
