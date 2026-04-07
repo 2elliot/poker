@@ -109,7 +109,7 @@ class QueueHandler(logging.Handler):
     def __init__(self, log_queue):
         super().__init__()
         self.log_queue = log_queue
-    
+
     def emit(self, record):
         log_entry = {
             'timestamp': time.time(),
@@ -119,9 +119,18 @@ class QueueHandler(logging.Handler):
         }
         self.log_queue.put(log_entry)
 
+class GameEngineLogFilter(logging.Filter):
+    """Filter out game engine messages from the SSE log stream.
+    The step-based frontend generates its own log messages from step event
+    data, so engine messages (flop/turn/river, player actions, etc.) would
+    appear as confusing duplicates in the browser log console."""
+    def filter(self, record):
+        return not record.name.startswith('backend.engine')
+
 # Setup logging
 queue_handler = QueueHandler(tournament_state['log_queue'])
 queue_handler.setFormatter(logging.Formatter('%(message)s'))
+queue_handler.addFilter(GameEngineLogFilter())
 logging.getLogger().addHandler(queue_handler)
 logging.getLogger().setLevel(logging.INFO)
 
@@ -962,15 +971,19 @@ def step_tournament():
                     'state': get_tournament_state_dict(tournament)
                 })
 
-            # Skip all-in players (they can't act)
-            if game.player_chips[player_id] == 0:
+            # Skip all-in players silently (they can't act)
+            skipped = 0
+            while player_id and game.player_chips[player_id] == 0 and skipped < len(game.active_players):
                 game.advance_to_next_player()
+                player_id = game.get_current_player()
+                skipped += 1
+
+            # After skipping, re-check if the round is now complete
+            if not player_id or game.is_betting_round_complete():
                 return jsonify({
                     'success': True,
                     'complete': False,
-                    'event': 'skip',
-                    'player': player_id,
-                    'reason': 'all-in',
+                    'event': 'waiting',
                     'state': get_tournament_state_dict(tournament)
                 })
 

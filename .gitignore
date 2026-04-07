@@ -16,3 +16,6 @@ logs/
 *.log
 .DS_Store
 Thumbs.db
+
+# Sample bots
+sample_bots/

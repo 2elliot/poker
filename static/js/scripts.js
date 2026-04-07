@@ -366,6 +366,18 @@ function handleStepEvent(data) {
         state.pot = data.pot || 0;
         logToConsole(`--- NEW HAND (${data.phase}) ---`, 'event-phase');
 
+        // Log blind posts from the deal event data
+        if (data.playerBets) {
+            const blinds = Object.entries(data.playerBets)
+                .filter(([, bet]) => bet > 0)
+                .sort((a, b) => a[1] - b[1]);
+            for (const [pid, bet] of blinds) {
+                const p = findPlayer(pid);
+                const name = p ? p.name : pid.replace(/_(\d+)$/, ' #$1');
+                logToConsole(`${name} posts blind: ${bet}`, 'event-action');
+            }
+        }
+
     } else if (event === 'action') {
         const actionStr = formatAction(data.player, data.action, data.amount);
         logToConsole(actionStr, 'event-action');
