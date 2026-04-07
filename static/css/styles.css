@@ -640,6 +640,13 @@ body {
     border-radius: 8px;
     padding: 20px;
     height: 300px;
+    box-sizing: border-box;
+}
+
+.chart-container canvas {
+    width: 100%;
+    height: calc(100% - 35px);
+    display: block;
 }
 
 .chart-container h3 {

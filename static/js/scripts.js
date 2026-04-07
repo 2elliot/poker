@@ -671,19 +671,28 @@ function drawChipsChart() {
     const canvas = document.getElementById('chipsChart');
     const ctx = canvas.getContext('2d');
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const displayWidth = rect.width;
+    const displayHeight = rect.height;
+
+    ctx.clearRect(0, 0, displayWidth, displayHeight);
 
     if (state.gamesPlayed === 0 || state.tablePlayers.length === 0) {
         ctx.fillStyle = '#666';
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Play games to see chip progression', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('Play games to see chip progression', displayWidth / 2, displayHeight / 2);
         return;
     }
 
     const padding = 40;
-    const chartWidth = canvas.width - padding * 2;
-    const chartHeight = canvas.height - padding * 2;
+    const chartWidth = displayWidth - padding * 2;
+    const chartHeight = displayHeight - padding * 2;
 
     let maxChips = STARTING_CHIPS;
     let maxGames = state.gamesPlayed;
@@ -698,8 +707,8 @@ function drawChipsChart() {
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, canvas.height - padding);
-    ctx.lineTo(canvas.width - padding, canvas.height - padding);
+    ctx.lineTo(padding, displayHeight - padding);
+    ctx.lineTo(displayWidth - padding, displayHeight - padding);
     ctx.stroke();
 
     // Draw grid lines
@@ -709,7 +718,7 @@ function drawChipsChart() {
         const y = padding + (chartHeight / 5) * i;
         ctx.beginPath();
         ctx.moveTo(padding, y);
-        ctx.lineTo(canvas.width - padding, y);
+        ctx.lineTo(displayWidth - padding, y);
         ctx.stroke();
 
         const chipValue = Math.round(maxChips - (maxChips / 5) * i);
@@ -726,7 +735,7 @@ function drawChipsChart() {
     for (let i = 0; i <= Math.min(maxGames, 10); i++) {
         const x = padding + (chartWidth / Math.min(maxGames, 10)) * i;
         const gameNum = Math.round((maxGames / Math.min(maxGames, 10)) * i);
-        ctx.fillText(gameNum, x, canvas.height - padding + 15);
+        ctx.fillText(gameNum, x, displayHeight - padding + 15);
     }
 
     // Draw lines for each player
@@ -742,7 +751,7 @@ function drawChipsChart() {
 
         history.forEach((point, i) => {
             const x = padding + (chartWidth / maxGames) * point.game;
-            const y = canvas.height - padding - (chartHeight * point.chips / maxChips);
+            const y = displayHeight - padding - (chartHeight * point.chips / maxChips);
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         });
@@ -750,7 +759,7 @@ function drawChipsChart() {
         ctx.stroke();
 
         // Draw legend
-        const legendX = canvas.width - padding - 150;
+        const legendX = displayWidth - padding - 150;
         const legendY = padding + 20 + (idx * 20);
         ctx.fillStyle = colors[idx % colors.length];
         ctx.fillRect(legendX, legendY - 6, 12, 12);
@@ -763,14 +772,16 @@ function drawChipsChart() {
     ctx.fillStyle = '#4a90e2';
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('Games', canvas.width / 2 - 20, canvas.height - 5);
+    ctx.fillText('Games', displayWidth / 2 - 20, displayHeight - 5);
 
     ctx.save();
-    ctx.translate(15, canvas.height / 2);
+    ctx.translate(15, displayHeight / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillText('Chips', 0, 0);
     ctx.restore();
 }
+
+window.addEventListener('resize', drawChipsChart);
 
 // Switch tabs
 function switchTab(tab) {
