@@ -176,12 +176,14 @@ class PokerGame:
         self.player_bets[small_blind_player] = small_blind_amount
         self.player_chips[small_blind_player] -= small_blind_amount
         self.pot += small_blind_amount
-        
+        self.total_pot_contributions[small_blind_player] += small_blind_amount
+
         # Post big blind
         big_blind_amount = min(self.big_blind, self.player_chips[big_blind_player])
         self.player_bets[big_blind_player] = big_blind_amount
         self.player_chips[big_blind_player] -= big_blind_amount
         self.pot += big_blind_amount
+        self.total_pot_contributions[big_blind_player] += big_blind_amount
         
         self.logger.info(f"{small_blind_player} posts small blind: {small_blind_amount}")
         self.logger.info(f"{big_blind_player} posts big blind: {big_blind_amount}")

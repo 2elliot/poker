@@ -757,12 +757,20 @@ def step_tournament():
                                if len(table.get_active_players()) >= 2}
 
                 if not active_tables:
-                    return jsonify({
-                        'success': True,
-                        'complete': True,
-                        'event': 'tournament_complete',
-                        'state': get_tournament_state_dict(tournament)
-                    })
+                    # No table has 2+ players. Try rebalancing to consolidate
+                    # stranded players from different tables before giving up.
+                    if len(tournament.get_active_players()) >= 2:
+                        tournament.rebalance_tables()
+                        active_tables = {tid: table for tid, table in tournament.tables.items()
+                                       if len(table.get_active_players()) >= 2}
+
+                    if not active_tables:
+                        return jsonify({
+                            'success': True,
+                            'complete': True,
+                            'event': 'tournament_complete',
+                            'state': get_tournament_state_dict(tournament)
+                        })
 
                 # Pick first table to play
                 table_id = list(active_tables.keys())[0]
