@@ -125,7 +125,8 @@ class GameEngineLogFilter(logging.Filter):
     data, so engine messages (flop/turn/river, player actions, etc.) would
     appear as confusing duplicates in the browser log console."""
     def filter(self, record):
-        return not record.name.startswith('backend.engine')
+        return not (record.name.startswith('backend.engine') or
+                    record.name.startswith('bot_manager'))
 
 # Setup logging
 queue_handler = QueueHandler(tournament_state['log_queue'])
@@ -995,6 +996,16 @@ def step_tournament():
                     'state': get_tournament_state_dict(tournament)
                 })
 
+            # Guard: verify player is still active and not folded
+            if player_id not in game.active_players:
+                game.advance_to_next_player()
+                return jsonify({
+                    'success': True,
+                    'complete': False,
+                    'event': 'waiting',
+                    'state': get_tournament_state_dict(tournament)
+                })
+
             # Get bot action
             bot = game.player_bots[player_id]
             game_state = game.get_game_state()
@@ -1024,7 +1035,10 @@ def step_tournament():
             game.process_action(player_id, action, amount)
             game.advance_to_next_player()
 
+            # Detect RAISE→ALL_IN conversion (player went to 0 chips after a raise)
             action_name = action.name.lower()
+            if action_name == 'raise' and game.player_chips[player_id] == 0:
+                action_name = 'all_in'
 
             return jsonify({
                 'success': True,
