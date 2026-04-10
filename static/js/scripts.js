@@ -191,6 +191,7 @@ function changeTableCount(delta) {
     state.numTables = Math.max(1, Math.min(8, state.numTables + delta));
     document.getElementById('tableCountValue').textContent = state.numTables;
     buildTableGrid();
+    renderTable();
 }
 
 // Build the visual table grid (called on table count change and on init)
@@ -249,7 +250,13 @@ function syncTableAssignments(stateData) {
     const backendTables = stateData.tables;
     state.activeTableId = stateData.activeTableId;
 
-    // Sync per-table player lists
+    // Detect whether the set of backend table IDs changed
+    const prevKeys = new Set(Object.keys(state.tables));
+    const newKeys = new Set(Object.keys(backendTables));
+    const keysChanged = prevKeys.size !== newKeys.size ||
+        [...newKeys].some(k => !prevKeys.has(k));
+
+    // Sync per-table player lists (preserve communityCards/pot for tables that still exist)
     for (const [tid, tableInfo] of Object.entries(backendTables)) {
         if (!state.tables[tid]) {
             state.tables[tid] = { communityCards: [], pot: 0, players: [] };
@@ -263,11 +270,14 @@ function syncTableAssignments(stateData) {
         if (!backendTables[tid]) delete state.tables[tid];
     }
 
-    // If the backend created more tables than the user chose, expand the grid
+    // Rebuild the grid if backend has more tables than the grid shows,
+    // or if the table set changed (e.g. first step after init, or rebalance)
     const backendCount = Object.keys(backendTables).length;
     if (backendCount > state.numTables) {
         state.numTables = backendCount;
         document.getElementById('tableCountValue').textContent = state.numTables;
+    }
+    if (keysChanged) {
         buildTableGrid();
     }
 }
