@@ -184,8 +184,8 @@ function clearTable() {
 
 // Change number of tables
 function changeTableCount(delta) {
-    if (state.isPlaying) {
-        alert('Cannot change tables while tournament is running');
+    if (state.isPlaying || state.tournamentInitialized) {
+        alert('Cannot change tables while a tournament is in progress. Reset first.');
         return;
     }
     state.numTables = Math.max(1, Math.min(8, state.numTables + delta));
@@ -254,20 +254,19 @@ function syncTableAssignments(stateData) {
         if (!state.tables[tid]) {
             state.tables[tid] = { communityCards: [], pot: 0, players: [] };
         }
-        // Map backend player IDs to our frontend player objects
         state.tables[tid].players = (tableInfo.allPlayers || []).map(pid => findPlayer(pid)).filter(Boolean);
         state.tables[tid].eliminated = tableInfo.eliminated || [];
     }
 
-    // Remove tables that no longer exist
+    // Remove frontend tables whose backend table no longer exists
     for (const tid of Object.keys(state.tables)) {
         if (!backendTables[tid]) delete state.tables[tid];
     }
 
-    // Only rebuild grid if table count actually changed
-    const tableCount = Object.keys(backendTables).length;
-    if (tableCount > 0 && tableCount !== state.numTables) {
-        state.numTables = tableCount;
+    // If the backend created more tables than the user chose, expand the grid
+    const backendCount = Object.keys(backendTables).length;
+    if (backendCount > state.numTables) {
+        state.numTables = backendCount;
         document.getElementById('tableCountValue').textContent = state.numTables;
         buildTableGrid();
     }
@@ -417,9 +416,40 @@ async function initializeTournament() {
     }
 }
 
-// Step through one action of the tournament
+// Fire one backend step call and handle the result.
+// Returns { done: false } normally, { done: true } on tournament complete or error.
+async function doOneStep() {
+    const response = await fetch(`${API_BASE_URL}/tournament/step`, {
+        method: 'POST'
+    });
+    const data = await response.json();
+
+    if (data.success) {
+        handleStepEvent(data);
+        if (data.complete) {
+            stopGameLoop();
+            state.isPlaying = false;
+            state.handInProgress = false;
+            document.getElementById('playBtn').textContent = 'Play';
+            logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
+            return { done: true };
+        }
+        return { done: false, tableId: (data.state || {}).activeTableId };
+    } else {
+        logToConsole(`Error: ${data.error}`, 'event-error');
+        if (data.error && data.error.includes('not initialized')) {
+            logToConsole('Server lost tournament state. Click Reset then Play to restart.', 'event-error');
+            stopGameLoop();
+            state.isPlaying = false;
+            state.tournamentInitialized = false;
+            document.getElementById('playBtn').textContent = 'Play';
+        }
+        return { done: true };
+    }
+}
+
+// Step through one action on EVERY active table
 async function stepGame() {
-    // Prevent overlapping calls
     if (state.stepping) return;
     state.stepping = true;
 
@@ -429,31 +459,17 @@ async function stepGame() {
             if (!initialized) { state.stepping = false; return; }
         }
 
-        const response = await fetch(`${API_BASE_URL}/tournament/step`, {
-            method: 'POST'
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            handleStepEvent(data);
-
-            if (data.complete) {
-                stopGameLoop();
-                state.isPlaying = false;
-                state.handInProgress = false;
-                document.getElementById('playBtn').textContent = 'Play';
-                logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
-            }
-        } else {
-            logToConsole(`Error: ${data.error}`, 'event-error');
-            // If backend lost the tournament (e.g. server restart), reset frontend state
-            if (data.error && data.error.includes('not initialized')) {
-                logToConsole('Server lost tournament state. Click Reset then Play to restart.', 'event-error');
-                stopGameLoop();
-                state.isPlaying = false;
-                state.tournamentInitialized = false;
-                document.getElementById('playBtn').textContent = 'Play';
+        // Step once per active table so every table advances one action
+        const activeCount = Math.max(1, Object.keys(state.tables).length);
+        const seen = new Set();
+        for (let i = 0; i < activeCount; i++) {
+            const result = await doOneStep();
+            if (result.done) break;
+            // Stop early if we've cycled back to a table we already stepped
+            if (result.tableId != null) {
+                const tid = String(result.tableId);
+                if (seen.has(tid)) break;
+                seen.add(tid);
             }
         }
     } catch (error) {
