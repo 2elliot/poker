@@ -556,6 +556,9 @@ def _build_tournament(init_config):
     """
     from backend.bot_manager import BotWrapper
 
+    num_tables = init_config.get('num_tables', 1)
+    # max_players_per_table is calculated later after we know the actual player count;
+    # store it temporarily as None so we can set it before creating the tournament.
     settings = TournamentSettings(
         tournament_type=TournamentType.FREEZE_OUT,
         starting_chips=init_config.get('starting_chips', 1000),
@@ -607,6 +610,12 @@ def _build_tournament(init_config):
 
     if len(player_names) < 2:
         return None, None, None
+
+    # Calculate max_players_per_table based on requested number of tables
+    if num_tables > 1 and len(player_names) >= num_tables * 2:
+        import math
+        settings.max_players_per_table = math.ceil(len(player_names) / num_tables)
+    # else: use default (6), which typically means 1 table for small groups
 
     tournament = PokerTournament(player_names, settings)
     return tournament, bot_manager, settings
@@ -668,6 +677,7 @@ def initialize_tournament():
             'small_blind': data.get('small_blind', 10),
             'big_blind': data.get('big_blind', 20),
             'blind_increase_interval': data.get('blind_increase_interval', 10),
+            'num_tables': data.get('num_tables', 1),
         }
         with open(INIT_CONFIG_FILE, 'w') as f:
             json.dump(init_config, f)
@@ -1173,6 +1183,17 @@ def get_tournament_state_dict(tournament):
             'bet': 0
         })
     
+    # Build table assignments: which players sit at which table
+    table_assignments = {}
+    for tid, table in tournament.tables.items():
+        table_assignments[str(tid)] = {
+            'players': table.get_active_players(),
+            'eliminated': list(table.eliminated_players),
+            'allPlayers': list(table.players),
+        }
+
+    active_table_list = [tid for tid, t in tournament.tables.items()
+                         if len(t.get_active_players()) >= 2]
     return {
         'handNumber': tournament.current_hand,
         'totalPlayers': len(tournament.players),
@@ -1182,6 +1203,9 @@ def get_tournament_state_dict(tournament):
         'players': players,
         'communityCards': [],
         'pot': 0,
+        'activeTableId': tournament_state.get('active_table_id'),
+        'totalTables': len(tournament.tables),
+        'tables': table_assignments,
         'leaderboard': [
             {'name': name, 'chips': chips, 'position': pos}
             for name, chips, pos in tournament.get_leaderboard()

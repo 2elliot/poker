@@ -10,7 +10,7 @@ const STARTING_CHIPS = 1000;
 
 const state = {
     availableBots: [],
-    tablePlayers: [],
+    tablePlayers: [],        // all players added from sidebar
     isPlaying: false,
     speed: 1,
     gameInterval: null,
@@ -19,17 +19,21 @@ const state = {
     gamesPlayed: 0,
     chipHistory: {},
     eventSource: null,
-    communityCards: [],
-    pot: 0,
     // Guards against overlapping step calls
     stepping: false,
     handInProgress: false,
+    // Multi-table state
+    numTables: 1,
+    // Per-table state keyed by table id string
+    tables: {},              // { '1': { communityCards: [], pot: 0, players: [] } }
+    activeTableId: null,     // which table is currently being played by backend
 };
 
 // Initialize
 async function init() {
     await loadAvailableBots();
     setupLogStreaming();
+    buildTableGrid();
     updateStatus();
     logToConsole('Poker tournament system initialized', 'event-phase');
 }
@@ -144,6 +148,7 @@ function addBotToTable(botId) {
     }
 
     logToConsole(`${displayName} joined the table`, 'event-action');
+    buildTableGrid();
     renderTable();
     updateStatus();
 }
@@ -156,6 +161,7 @@ function removeBotFromTable(botId) {
     }
     state.tablePlayers = state.tablePlayers.filter(p => p.botId !== botId);
     logToConsole('Bot removed from table', 'event-action');
+    buildTableGrid();
     renderTable();
     updateStatus();
 }
@@ -167,10 +173,104 @@ function clearTable() {
     state.isPlaying = false;
     state.tournamentInitialized = false;
     state.handInProgress = false;
+    state.tables = {};
+    state.activeTableId = null;
     stopGameLoop();
     logToConsole('Table cleared', 'event-action');
+    buildTableGrid();
     renderTable();
     updateStatus();
+}
+
+// Change number of tables
+function changeTableCount(delta) {
+    if (state.isPlaying) {
+        alert('Cannot change tables while tournament is running');
+        return;
+    }
+    state.numTables = Math.max(1, Math.min(8, state.numTables + delta));
+    document.getElementById('tableCountValue').textContent = state.numTables;
+    buildTableGrid();
+}
+
+// Build the visual table grid (called on table count change and on init)
+function buildTableGrid() {
+    const grid = document.getElementById('tablesGrid');
+    const emptyMessage = document.getElementById('emptyMessage');
+
+    if (state.tablePlayers.length === 0) {
+        emptyMessage.style.display = 'block';
+        grid.style.display = 'none';
+        return;
+    }
+
+    emptyMessage.style.display = 'none';
+    grid.style.display = 'grid';
+
+    const n = state.numTables;
+    const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 6 ? 3 : 4;
+    const rows = Math.ceil(n / cols);
+    grid.style.setProperty('--table-cols', cols);
+
+    // Scale: 1 table = 1.0, 2 = 0.85, 4 = 0.7, 6+ = 0.6
+    const scale = n <= 1 ? 1.0 : n <= 2 ? 0.85 : n <= 4 ? 0.7 : 0.6;
+    grid.style.setProperty('--table-scale', scale);
+
+    // Build HTML for each table
+    let html = '';
+    for (let t = 1; t <= n; t++) {
+        const isActive = String(t) === String(state.activeTableId);
+        html += `
+        <div class="poker-table-wrapper ${isActive ? 'active-table' : ''}" data-table-id="${t}">
+            <div class="table-label">Table ${t}</div>
+            <div class="poker-table-area">
+                <div class="poker-table" id="pokerTable_${t}">
+                    ${Array.from({length: MAX_PLAYERS}, (_, i) =>
+                        `<div class="player-seat pos-${i} empty" data-table="${t}" data-seat="${i}"></div>`
+                    ).join('')}
+                    <div class="table-center">
+                        <div class="pot-display">
+                            <div class="pot-label">POT</div>
+                            <div class="pot-amount" id="potAmount_${t}">0</div>
+                        </div>
+                        <div class="community-cards" id="communityCards_${t}"></div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+    grid.innerHTML = html;
+}
+
+// Initialize per-table state from backend table assignments
+function syncTableAssignments(stateData) {
+    if (!stateData || !stateData.tables) return;
+
+    const backendTables = stateData.tables;
+    state.activeTableId = stateData.activeTableId;
+
+    // Sync per-table player lists
+    for (const [tid, tableInfo] of Object.entries(backendTables)) {
+        if (!state.tables[tid]) {
+            state.tables[tid] = { communityCards: [], pot: 0, players: [] };
+        }
+        // Map backend player IDs to our frontend player objects
+        state.tables[tid].players = (tableInfo.allPlayers || []).map(pid => findPlayer(pid)).filter(Boolean);
+        state.tables[tid].eliminated = tableInfo.eliminated || [];
+    }
+
+    // Remove tables that no longer exist
+    for (const tid of Object.keys(state.tables)) {
+        if (!backendTables[tid]) delete state.tables[tid];
+    }
+
+    // Only rebuild grid if table count actually changed
+    const tableCount = Object.keys(backendTables).length;
+    if (tableCount > 0 && tableCount !== state.numTables) {
+        state.numTables = tableCount;
+        document.getElementById('tableCountValue').textContent = state.numTables;
+        buildTableGrid();
+    }
 }
 
 // Console functions
@@ -188,24 +288,47 @@ function clearConsole() {
     document.getElementById('consoleContent').innerHTML = '';
 }
 
-// Render table
+// Render all tables
 function renderTable() {
     const emptyMessage = document.getElementById('emptyMessage');
-    const pokerTable = document.getElementById('pokerTable');
+    const grid = document.getElementById('tablesGrid');
 
     if (state.tablePlayers.length === 0) {
         emptyMessage.style.display = 'block';
-        pokerTable.style.display = 'none';
+        grid.style.display = 'none';
         return;
     }
 
     emptyMessage.style.display = 'none';
-    pokerTable.style.display = 'block';
+    grid.style.display = 'grid';
 
+    const tableIds = Object.keys(state.tables);
+
+    // If tournament hasn't started yet (no backend tables), show all players on table 1
+    if (tableIds.length === 0) {
+        renderSingleTable('1', state.tablePlayers, [], 0);
+        return;
+    }
+
+    // Highlight active table
+    document.querySelectorAll('.poker-table-wrapper').forEach(el => {
+        const tid = el.dataset.tableId;
+        el.classList.toggle('active-table', String(tid) === String(state.activeTableId));
+    });
+
+    for (const tid of tableIds) {
+        const tableState = state.tables[tid];
+        renderSingleTable(tid, tableState.players || [], tableState.communityCards || [], tableState.pot || 0);
+    }
+}
+
+// Render one poker table
+function renderSingleTable(tid, players, communityCards, pot) {
     for (let i = 0; i < MAX_PLAYERS; i++) {
-        const seat = document.querySelector(`[data-seat="${i}"]`);
-        const player = state.tablePlayers[i];
+        const seat = document.querySelector(`[data-table="${tid}"][data-seat="${i}"]`);
+        if (!seat) continue;
 
+        const player = players[i];
         if (player) {
             const isEliminated = player.chips <= 0;
             const isFolded = player.folded;
@@ -228,15 +351,14 @@ function renderTable() {
         }
     }
 
-    // Render community cards
-    const communityCardsEl = document.getElementById('communityCards');
-    if (state.communityCards && state.communityCards.length > 0) {
-        communityCardsEl.innerHTML = state.communityCards.map(card => renderCard(card)).join('');
-    } else {
-        communityCardsEl.innerHTML = '';
+    const communityCardsEl = document.getElementById(`communityCards_${tid}`);
+    if (communityCardsEl) {
+        communityCardsEl.innerHTML = (communityCards && communityCards.length > 0)
+            ? communityCards.map(card => renderCard(card)).join('') : '';
     }
 
-    document.getElementById('potAmount').textContent = `${state.pot || 0}`;
+    const potEl = document.getElementById(`potAmount_${tid}`);
+    if (potEl) potEl.textContent = `${pot || 0}`;
 }
 
 // Render player cards
@@ -274,7 +396,8 @@ async function initializeTournament() {
                 starting_chips: STARTING_CHIPS,
                 small_blind: 10,
                 big_blind: 20,
-                blind_increase_interval: 10
+                blind_increase_interval: 10,
+                num_tables: state.numTables
             })
         });
 
@@ -343,15 +466,42 @@ async function stepGame() {
     }
 }
 
+// Get or create per-table state
+function getTableState(tid) {
+    const key = String(tid || '1');
+    if (!state.tables[key]) {
+        state.tables[key] = { communityCards: [], pot: 0, players: [] };
+    }
+    return state.tables[key];
+}
+
 // Handle a step event from the backend
 function handleStepEvent(data) {
     const event = data.event;
 
+    // Sync table assignments from backend whenever state is present
+    if (data.state) {
+        syncTableAssignments(data.state);
+    }
+
+    // Determine which table this event is for
+    const st = data.state || {};
+    const tid = String(st.activeTableId || '1');
+    state.activeTableId = tid;
+    const ts = getTableState(tid);
+
+    // Build table label for multi-table tournaments
+    const tableLabel = (st.totalTables && st.totalTables > 1 && st.activeTableId)
+        ? `[Table ${st.activeTableId}] ` : '';
+
     if (event === 'deal') {
         state.handInProgress = true;
-        // Clear previous hand state
-        state.communityCards = [];
-        state.tablePlayers.forEach(p => { p.folded = false; p.cards = []; p.bet = 0; });
+        // Clear this table's hand state
+        ts.communityCards = [];
+        ts.pot = data.pot || 0;
+        if (ts.players) {
+            ts.players.forEach(p => { if (p) { p.folded = false; p.cards = []; p.bet = 0; } });
+        }
 
         // Set hole cards
         if (data.playerCards) {
@@ -361,12 +511,10 @@ function handleStepEvent(data) {
             }
         }
 
-        // Update chips and bets
         syncChipsAndBets(data);
-        state.pot = data.pot || 0;
-        logToConsole(`--- NEW HAND (${data.phase}) ---`, 'event-phase');
+        logToConsole(`${tableLabel}--- NEW HAND (${data.phase}) ---`, 'event-phase');
 
-        // Log blind posts from the deal event data
+        // Log blind posts
         if (data.playerBets) {
             const blinds = Object.entries(data.playerBets)
                 .filter(([, bet]) => bet > 0)
@@ -374,32 +522,31 @@ function handleStepEvent(data) {
             for (const [pid, bet] of blinds) {
                 const p = findPlayer(pid);
                 const name = p ? p.name : pid.replace(/_(\d+)$/, ' #$1');
-                logToConsole(`${name} posts blind: ${bet}`, 'event-action');
+                logToConsole(`${tableLabel}${name} posts blind: ${bet}`, 'event-action');
             }
         }
 
     } else if (event === 'action') {
         const actionStr = formatAction(data.player, data.action, data.amount);
-        logToConsole(actionStr, 'event-action');
+        logToConsole(`${tableLabel}${actionStr}`, 'event-action');
 
-        // Mark folded players
         if (data.action === 'fold') {
             const player = findPlayer(data.player);
             if (player) player.folded = true;
         }
 
         syncChipsAndBets(data);
-        state.pot = data.pot || 0;
+        ts.pot = data.pot || 0;
 
     } else if (event === 'community') {
-        state.communityCards = data.communityCards || [];
-        state.pot = data.pot || 0;
+        ts.communityCards = data.communityCards || [];
+        ts.pot = data.pot || 0;
         syncChipsAndBets(data);
-        logToConsole(`--- ${data.phase.toUpperCase()}: ${formatCommunityCards(state.communityCards)} ---`, 'event-phase');
+        logToConsole(`${tableLabel}--- ${data.phase.toUpperCase()}: ${formatCommunityCards(ts.communityCards)} ---`, 'event-phase');
 
     } else if (event === 'showdown') {
-        state.communityCards = data.communityCards || [];
-        state.pot = 0;
+        ts.communityCards = data.communityCards || [];
+        ts.pot = 0;
 
         // Show all hands at showdown
         if (data.playerHands) {
@@ -413,7 +560,7 @@ function handleStepEvent(data) {
             const p = findPlayer(w);
             return p ? p.name : w;
         });
-        logToConsole(`WINNERS: ${winners.join(', ')}`, 'event-winner');
+        logToConsole(`${tableLabel}WINNERS: ${winners.join(', ')}`, 'event-winner');
 
         // Update chips from showdown
         if (data.playerChips) {
@@ -423,7 +570,6 @@ function handleStepEvent(data) {
                     const prevChips = player.chips;
                     player.chips = chips;
 
-                    // Update statistics
                     const stats = state.statistics[player.id];
                     if (stats) {
                         const delta = chips - prevChips;
@@ -449,13 +595,13 @@ function handleStepEvent(data) {
         state.gamesPlayed++;
         state.handInProgress = false;
 
-        // Clear bets
-        state.tablePlayers.forEach(p => { p.bet = 0; });
+        // Clear bets for this table's players
+        if (ts.players) ts.players.forEach(p => { if (p) p.bet = 0; });
 
         renderStatistics();
     }
 
-    // Always sync tournament-level state
+    // Sync tournament-level state (eliminations etc)
     if (data.state) {
         syncTournamentState(data.state);
     }
@@ -583,8 +729,8 @@ async function resetGame() {
 
     state.tournamentInitialized = false;
     state.gamesPlayed = 0;
-    state.communityCards = [];
-    state.pot = 0;
+    state.tables = {};
+    state.activeTableId = null;
 
     state.tablePlayers.forEach(player => {
         player.chips = STARTING_CHIPS;
@@ -603,6 +749,7 @@ async function resetGame() {
 
     logToConsole('Game reset', 'event-action');
     document.getElementById('playBtn').textContent = 'Play';
+    buildTableGrid();
     renderTable();
     updateStatus();
     renderStatistics();
