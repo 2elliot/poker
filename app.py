@@ -23,7 +23,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
-from backend.tournament_runner import TournamentRunner, TournamentSettings, TournamentType
+from backend.tournament import TournamentSettings, TournamentType
 from backend.bot_manager import BotManager
 from backend.engine.poker_game import PokerGame, PlayerAction
 from backend.tournament import PokerTournament
@@ -83,20 +83,14 @@ if not MASTER_PASSWORD:
 
 # Tournament state (temporary, cleared on restart - this is OK)
 tournament_state = {
-    'runner': None,
     'tournament': None,
-    'is_running': False,
-    'is_paused': False,
-    'current_game': None,
     'bot_manager': None,
     'log_queue': Queue(),
     'settings': None,
     # Step-by-step hand state
-    'hand_phase': None,       # None, 'preflop', 'flop', 'turn', 'river', 'showdown', 'done'
+    'hand_phase': None,       # None, 'preflop', 'flop', 'turn', 'river', 'showdown'
     'active_game': None,      # Current PokerGame instance (persists across steps)
-    'active_table_id': None,  # Which table is currently being played
-    'pending_tables': [],     # Tables still needing to play this hand
-    'action_queue': [],       # Queued action results to send to frontend
+    'stats_recorded': False,  # Prevents duplicate stats recording at tournament end
 }
 
 state_lock = Lock()
@@ -120,13 +114,13 @@ class QueueHandler(logging.Handler):
         self.log_queue.put(log_entry)
 
 class GameEngineLogFilter(logging.Filter):
-    """Filter out game engine messages from the SSE log stream.
+    """Filter out game-related messages from the SSE log stream.
     The step-based frontend generates its own log messages from step event
-    data, so engine messages (flop/turn/river, player actions, etc.) would
-    appear as confusing duplicates in the browser log console."""
+    data, so engine/tournament messages would appear as duplicates."""
     def filter(self, record):
         return not (record.name.startswith('backend.engine') or
-                    record.name.startswith('bot_manager'))
+                    record.name.startswith('bot_manager') or
+                    record.name.startswith('tournament'))
 
 # Setup logging
 queue_handler = QueueHandler(tournament_state['log_queue'])
@@ -543,9 +537,6 @@ def _clear_hand_state():
     """Reset the step-by-step hand state"""
     tournament_state['hand_phase'] = None
     tournament_state['active_game'] = None
-    tournament_state['active_table_id'] = None
-    tournament_state['pending_tables'] = []
-    tournament_state['action_queue'] = []
     tournament_state['stats_recorded'] = False
 
 
@@ -639,8 +630,6 @@ def _ensure_tournament():
         tournament_state['tournament'] = tournament
         tournament_state['bot_manager'] = bot_manager
         tournament_state['settings'] = settings
-        tournament_state['is_running'] = False
-        tournament_state['is_paused'] = False
         _clear_hand_state()
 
         logging.info(f"Tournament restored from saved config with "
@@ -687,8 +676,6 @@ def initialize_tournament():
             tournament_state['bot_manager'] = bot_manager
             tournament_state['tournament'] = tournament
             tournament_state['settings'] = settings
-            tournament_state['is_running'] = False
-            tournament_state['is_paused'] = False
             _clear_hand_state()
 
             # Clear log queue
@@ -710,6 +697,14 @@ def initialize_tournament():
             'success': False,
             'error': 'Failed to initialize tournament'
         }), 500
+
+
+def _get_active_table(tournament):
+    """Get the single active table with 2+ players, or None."""
+    for table in tournament.tables.values():
+        if len(table.get_active_players()) >= 2:
+            return table
+    return None
 
 
 @app.route('/api/tournament/step', methods=['POST'])
@@ -755,30 +750,15 @@ def step_tournament():
 
             game = tournament_state['active_game']
 
-            # Capture which table this step belongs to BEFORE it may change
-            # (showdown mutates active_table_id to point at the next table)
-            current_table_id = tournament_state['active_table_id']
-
             # === No active hand: start a new one ===
             if game is None:
-                # Single table: find the one active table
-                table = None
-                table_id = None
-                for tid, tbl in tournament.tables.items():
-                    if len(tbl.get_active_players()) >= 2:
-                        table_id = tid
-                        table = tbl
-                        break
+                table = _get_active_table(tournament)
 
                 if table is None:
                     # Try rebalancing to consolidate stranded players
                     if len(tournament.get_active_players()) >= 2:
                         tournament.rebalance_tables()
-                        for tid, tbl in tournament.tables.items():
-                            if len(tbl.get_active_players()) >= 2:
-                                table_id = tid
-                                table = tbl
-                                break
+                        table = _get_active_table(tournament)
 
                     if table is None:
                         return jsonify({
@@ -787,9 +767,6 @@ def step_tournament():
                             'event': 'tournament_complete',
                             'state': get_tournament_state_dict(tournament)
                         })
-
-                tournament_state['active_table_id'] = table_id
-                current_table_id = table_id
 
                 player_ids = table.get_active_players()
                 small_blind, big_blind = table.get_current_blinds()
@@ -824,7 +801,6 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'deal',
-                    'tableId': current_table_id,
                     'phase': 'preflop',
                     'playerCards': player_cards,
                     'pot': game.pot,
@@ -856,7 +832,6 @@ def step_tournament():
                         'success': True,
                         'complete': False,
                         'event': 'community',
-                        'tableId': current_table_id,
                         'phase': 'flop',
                         'communityCards': [serialize_card(c) for c in game.community_cards],
                         'pot': game.pot,
@@ -876,7 +851,6 @@ def step_tournament():
                         'success': True,
                         'complete': False,
                         'event': 'community',
-                        'tableId': current_table_id,
                         'phase': 'turn',
                         'communityCards': [serialize_card(c) for c in game.community_cards],
                         'pot': game.pot,
@@ -896,7 +870,6 @@ def step_tournament():
                         'success': True,
                         'complete': False,
                         'event': 'community',
-                        'tableId': current_table_id,
                         'phase': 'river',
                         'communityCards': [serialize_card(c) for c in game.community_cards],
                         'pot': game.pot,
@@ -927,10 +900,12 @@ def step_tournament():
                         game.player_chips[player_id] = 0
 
                 # Update tournament chips
-                table_id = tournament_state['active_table_id']
                 for player_id, chips in game.player_chips.items():
                     tournament.update_player_chips(player_id, chips)
-                tournament.tables[table_id].dealer_button = game.dealer_button
+                # Update dealer button on the table
+                table = next(iter(tournament.tables.values()), None)
+                if table:
+                    table.dealer_button = game.dealer_button
 
                 # Build showdown result with player hands
                 showdown_hands = {}
@@ -947,7 +922,6 @@ def step_tournament():
                     'success': True,
                     'complete': tournament.is_tournament_complete(),
                     'event': 'showdown',
-                    'tableId': current_table_id,
                     'winners': winners,
                     'playerChips': game.player_chips.copy(),
                     'playerHands': showdown_hands,
@@ -965,7 +939,6 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'waiting',
-                    'tableId': current_table_id,
                     'state': get_tournament_state_dict(tournament)
                 })
 
@@ -982,7 +955,6 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'waiting',
-                    'tableId': current_table_id,
                     'state': get_tournament_state_dict(tournament)
                 })
 
@@ -993,7 +965,6 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'waiting',
-                    'tableId': current_table_id,
                     'state': get_tournament_state_dict(tournament)
                 })
 
@@ -1012,7 +983,6 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'action',
-                    'tableId': current_table_id,
                     'player': player_id,
                     'action': 'fold',
                     'amount': 0,
@@ -1036,7 +1006,6 @@ def step_tournament():
                 'success': True,
                 'complete': False,
                 'event': 'action',
-                'tableId': current_table_id,
                 'player': player_id,
                 'action': action_name,
                 'amount': amount,
@@ -1122,9 +1091,7 @@ def reset_tournament():
         with state_lock:
             tournament_state['tournament'] = None
             tournament_state['bot_manager'] = None
-            tournament_state['is_running'] = False
-            tournament_state['is_paused'] = False
-            tournament_state['current_game'] = None
+            tournament_state['settings'] = None
             _clear_hand_state()
 
             # Remove saved init config so lazy restore won't recreate
