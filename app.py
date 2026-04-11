@@ -611,11 +611,12 @@ def _build_tournament(init_config):
     if len(player_names) < 2:
         return None, None, None
 
-    # Calculate max_players_per_table based on requested number of tables
-    if num_tables > 1 and len(player_names) >= num_tables * 2:
-        import math
-        settings.max_players_per_table = math.ceil(len(player_names) / num_tables)
-    # else: use default (6), which typically means 1 table for small groups
+    # Calculate max_players_per_table based on requested number of tables.
+    # Clamp to however many tables we can actually fill (min 2 per table).
+    import math
+    if num_tables > 1 and len(player_names) >= 4:
+        actual_tables = min(num_tables, len(player_names) // 2)
+        settings.max_players_per_table = math.ceil(len(player_names) / actual_tables)
 
     tournament = PokerTournament(player_names, settings)
     return tournament, bot_manager, settings

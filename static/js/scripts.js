@@ -426,39 +426,7 @@ async function initializeTournament() {
     }
 }
 
-// Fire one backend step call and handle the result.
-// Returns { done: false } normally, { done: true } on tournament complete or error.
-async function doOneStep() {
-    const response = await fetch(`${API_BASE_URL}/tournament/step`, {
-        method: 'POST'
-    });
-    const data = await response.json();
-
-    if (data.success) {
-        handleStepEvent(data);
-        if (data.complete) {
-            stopGameLoop();
-            state.isPlaying = false;
-            state.handInProgress = false;
-            document.getElementById('playBtn').textContent = 'Play';
-            logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
-            return { done: true };
-        }
-        return { done: false, tableId: data.tableId };
-    } else {
-        logToConsole(`Error: ${data.error}`, 'event-error');
-        if (data.error && data.error.includes('not initialized')) {
-            logToConsole('Server lost tournament state. Click Reset then Play to restart.', 'event-error');
-            stopGameLoop();
-            state.isPlaying = false;
-            state.tournamentInitialized = false;
-            document.getElementById('playBtn').textContent = 'Play';
-        }
-        return { done: true };
-    }
-}
-
-// Step through one action on EVERY active table
+// Step through one action of the tournament
 async function stepGame() {
     if (state.stepping) return;
     state.stepping = true;
@@ -469,17 +437,30 @@ async function stepGame() {
             if (!initialized) { state.stepping = false; return; }
         }
 
-        // Step once per active table so every table advances one action
-        const activeCount = Math.max(1, Object.keys(state.tables).length);
-        const seen = new Set();
-        for (let i = 0; i < activeCount; i++) {
-            const result = await doOneStep();
-            if (result.done) break;
-            // Stop early if we've cycled back to a table we already stepped
-            if (result.tableId != null) {
-                const tid = String(result.tableId);
-                if (seen.has(tid)) break;
-                seen.add(tid);
+        const response = await fetch(`${API_BASE_URL}/tournament/step`, {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            handleStepEvent(data);
+
+            if (data.complete) {
+                stopGameLoop();
+                state.isPlaying = false;
+                state.handInProgress = false;
+                document.getElementById('playBtn').textContent = 'Play';
+                logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
+            }
+        } else {
+            logToConsole(`Error: ${data.error}`, 'event-error');
+            if (data.error && data.error.includes('not initialized')) {
+                logToConsole('Server lost tournament state. Click Reset then Play to restart.', 'event-error');
+                stopGameLoop();
+                state.isPlaying = false;
+                state.tournamentInitialized = false;
+                document.getElementById('playBtn').textContent = 'Play';
             }
         }
     } catch (error) {
