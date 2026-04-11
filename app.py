@@ -556,9 +556,6 @@ def _build_tournament(init_config):
     """
     from backend.bot_manager import BotWrapper
 
-    num_tables = init_config.get('num_tables', 1)
-    # max_players_per_table is calculated later after we know the actual player count;
-    # store it temporarily as None so we can set it before creating the tournament.
     settings = TournamentSettings(
         tournament_type=TournamentType.FREEZE_OUT,
         starting_chips=init_config.get('starting_chips', 1000),
@@ -611,12 +608,8 @@ def _build_tournament(init_config):
     if len(player_names) < 2:
         return None, None, None
 
-    # Calculate max_players_per_table based on requested number of tables.
-    # Clamp to however many tables we can actually fill (min 2 per table).
-    import math
-    if num_tables > 1 and len(player_names) >= 4:
-        actual_tables = min(num_tables, len(player_names) // 2)
-        settings.max_players_per_table = math.ceil(len(player_names) / actual_tables)
+    # Force all players onto a single table
+    settings.max_players_per_table = len(player_names)
 
     tournament = PokerTournament(player_names, settings)
     return tournament, bot_manager, settings
@@ -678,7 +671,6 @@ def initialize_tournament():
             'small_blind': data.get('small_blind', 10),
             'big_blind': data.get('big_blind', 20),
             'blind_increase_interval': data.get('blind_increase_interval', 10),
-            'num_tables': data.get('num_tables', 1),
         }
         with open(INIT_CONFIG_FILE, 'w') as f:
             json.dump(init_config, f)
@@ -769,43 +761,32 @@ def step_tournament():
 
             # === No active hand: start a new one ===
             if game is None:
-                # If a previous showdown already designated the next table to
-                # play (via active_table_id), use it directly instead of
-                # rebuilding the list (which would always pick table 1).
-                preset_table_id = tournament_state['active_table_id']
-                if preset_table_id is not None:
-                    preset_table = tournament.tables.get(preset_table_id)
-                    if preset_table and len(preset_table.get_active_players()) >= 2:
-                        table_id = preset_table_id
-                        table = preset_table
-                    else:
-                        # Designated table isn't playable, clear and rebuild
-                        preset_table_id = None
+                # Single table: find the one active table
+                table = None
+                table_id = None
+                for tid, tbl in tournament.tables.items():
+                    if len(tbl.get_active_players()) >= 2:
+                        table_id = tid
+                        table = tbl
+                        break
 
-                if preset_table_id is None:
-                    # Starting a fresh round — find all active tables
-                    active_tables = {tid: tbl for tid, tbl in tournament.tables.items()
-                                   if len(tbl.get_active_players()) >= 2}
+                if table is None:
+                    # Try rebalancing to consolidate stranded players
+                    if len(tournament.get_active_players()) >= 2:
+                        tournament.rebalance_tables()
+                        for tid, tbl in tournament.tables.items():
+                            if len(tbl.get_active_players()) >= 2:
+                                table_id = tid
+                                table = tbl
+                                break
 
-                    if not active_tables:
-                        # Try rebalancing to consolidate stranded players
-                        if len(tournament.get_active_players()) >= 2:
-                            tournament.rebalance_tables()
-                            active_tables = {tid: tbl for tid, tbl in tournament.tables.items()
-                                           if len(tbl.get_active_players()) >= 2}
-
-                        if not active_tables:
-                            return jsonify({
-                                'success': True,
-                                'complete': True,
-                                'event': 'tournament_complete',
-                                'state': get_tournament_state_dict(tournament)
-                            })
-
-                    # Pick first table to play
-                    table_id = list(active_tables.keys())[0]
-                    table = active_tables[table_id]
-                    tournament_state['pending_tables'] = list(active_tables.keys())[1:]
+                    if table is None:
+                        return jsonify({
+                            'success': True,
+                            'complete': True,
+                            'event': 'tournament_complete',
+                            'state': get_tournament_state_dict(tournament)
+                        })
 
                 tournament_state['active_table_id'] = table_id
                 current_table_id = table_id
@@ -958,38 +939,8 @@ def step_tournament():
                     if hand:
                         showdown_hands[pid] = [serialize_card(c) for c in hand.cards]
 
-                # Check if more tables need to play
-                pending = tournament_state['pending_tables']
-                if pending:
-                    # More tables: start next table on next step call
-                    next_table_id = pending.pop(0)
-                    tournament_state['pending_tables'] = pending
-                    tournament_state['active_game'] = None  # Will init next table on next call
-                    # But first set up for next table
-                    table = tournament.tables.get(next_table_id)
-                    if table and len(table.get_active_players()) >= 2:
-                        tournament_state['active_table_id'] = next_table_id
-                    else:
-                        tournament_state['active_table_id'] = None
-
-                    return jsonify({
-                        'success': True,
-                        'complete': False,
-                        'event': 'showdown',
-                        'tableId': current_table_id,
-                        'winners': winners,
-                        'playerChips': game.player_chips.copy(),
-                        'playerHands': showdown_hands,
-                        'communityCards': [serialize_card(c) for c in game.community_cards],
-                        'pot': 0,
-                        'state': get_tournament_state_dict(tournament)
-                    })
-
-                # All tables done - advance hand
+                # Advance hand and clear state for next hand
                 tournament.advance_hand()
-                if tournament.should_rebalance_tables():
-                    tournament.rebalance_tables()
-
                 _clear_hand_state()
 
                 return jsonify({
@@ -1215,17 +1166,6 @@ def get_tournament_state_dict(tournament):
             'bet': 0
         })
     
-    # Build table assignments: which players sit at which table
-    table_assignments = {}
-    for tid, table in tournament.tables.items():
-        table_assignments[str(tid)] = {
-            'players': table.get_active_players(),
-            'eliminated': list(table.eliminated_players),
-            'allPlayers': list(table.players),
-        }
-
-    active_table_list = [tid for tid, t in tournament.tables.items()
-                         if len(t.get_active_players()) >= 2]
     return {
         'handNumber': tournament.current_hand,
         'totalPlayers': len(tournament.players),
@@ -1235,9 +1175,6 @@ def get_tournament_state_dict(tournament):
         'players': players,
         'communityCards': [],
         'pot': 0,
-        'activeTableId': tournament_state.get('active_table_id'),
-        'totalTables': len(tournament.tables),
-        'tables': table_assignments,
         'leaderboard': [
             {'name': name, 'chips': chips, 'position': pos}
             for name, chips, pos in tournament.get_leaderboard()

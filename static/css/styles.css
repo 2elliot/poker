@@ -25,6 +25,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
 }
 
 .sidebar-header {
@@ -212,71 +213,18 @@ body {
     align-items: center;
     justify-content: center;
     position: relative;
-    padding: 10px;
+    padding: 20px;
     overflow: auto;
-}
-
-/* Multi-table grid */
-.tables-grid {
-    --table-scale: 1;
-    display: grid;
-    grid-template-columns: repeat(var(--table-cols, 1), 1fr);
-    gap: 10px;
-    width: 100%;
-    height: 100%;
-    padding: 5px;
-}
-
-.poker-table-wrapper {
-    position: relative;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    background: #222;
-    border-radius: 8px;
-    border: 2px solid #333;
-    overflow: hidden;
-    transition: border-color 0.3s;
-}
-
-.poker-table-wrapper.active-table {
-    border-color: #4a90e2;
-    box-shadow: 0 0 12px rgba(74, 144, 226, 0.25);
-}
-
-.table-label {
-    text-align: center;
-    padding: calc(4px * var(--table-scale)) calc(8px * var(--table-scale));
-    font-size: calc(12px * var(--table-scale));
-    font-weight: 600;
-    color: #888;
-    background: #2a2a2a;
-    border-bottom: 1px solid #333;
-    flex-shrink: 0;
-}
-
-.poker-table-wrapper.active-table .table-label {
-    color: #4a90e2;
-}
-
-.poker-table-area {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 0;
-    padding: calc(15px * var(--table-scale));
 }
 
 .poker-table {
     width: 70%;
     height: 80%;
     background: #1a4d2e;
-    border-radius: calc(50px * var(--table-scale));
-    border: calc(8px * var(--table-scale)) solid #8b4513;
+    border-radius: 50px;
+    border: 8px solid #8b4513;
     position: relative;
-    box-shadow: 0 calc(10px * var(--table-scale)) calc(40px * var(--table-scale)) rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .table-center {
@@ -289,32 +237,32 @@ body {
 
 .pot-display {
     background: rgba(0, 0, 0, 0.3);
-    padding: calc(6px * var(--table-scale)) calc(14px * var(--table-scale));
-    border-radius: calc(20px * var(--table-scale));
-    margin-bottom: calc(8px * var(--table-scale));
+    padding: 10px 20px;
+    border-radius: 20px;
+    margin-bottom: 15px;
 }
 
 .pot-label {
-    font-size: calc(10px * var(--table-scale));
+    font-size: 12px;
     color: #aaa;
 }
 
 .pot-amount {
-    font-size: calc(18px * var(--table-scale));
+    font-size: 24px;
     font-weight: 700;
     color: #ffd700;
 }
 
 .community-cards {
     display: flex;
-    gap: calc(4px * var(--table-scale));
+    gap: 8px;
     justify-content: center;
 }
 
 /* Player Positions */
 .player-seat {
     position: absolute;
-    width: calc(120px * var(--table-scale));
+    width: 140px;
     text-align: center;
 }
 
@@ -322,7 +270,7 @@ body {
     opacity: 0.3;
 }
 
-/* 10 player positions around oval table -> top left counter clockwise */
+/* 10 player positions around oval table */
 .player-seat.pos-0 { top: -20%; left: 15%; }
 .player-seat.pos-1 { top: -20%; left: 50%; transform: translateX(-50%); }
 .player-seat.pos-2 { top: -20%; right: 15%; }
@@ -348,15 +296,15 @@ body {
 
 .player-info {
     background: #252525;
-    border: calc(2px * var(--table-scale)) solid #333;
-    border-radius: calc(6px * var(--table-scale));
-    padding: calc(8px * var(--table-scale));
-    margin-bottom: calc(4px * var(--table-scale));
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
 }
 
 .player-info.active {
     border-color: #4a90e2;
-    box-shadow: 0 0 calc(8px * var(--table-scale)) rgba(74, 144, 226, 0.3);
+    box-shadow: 0 0 10px rgba(74, 144, 226, 0.3);
 }
 
 .player-info.folded {
@@ -368,9 +316,9 @@ body {
 }
 
 .player-status {
-    font-size: calc(8px * var(--table-scale));
+    font-size: 10px;
     font-weight: 700;
-    margin-top: calc(2px * var(--table-scale));
+    margin-top: 3px;
     text-transform: uppercase;
 }
 
@@ -383,45 +331,42 @@ body {
 }
 
 .player-name {
-    font-size: calc(9px * var(--table-scale));
+    font-size: 10px;
     font-weight: 600;
     color: #fff;
-    margin-bottom: calc(2px * var(--table-scale));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin-bottom: 4px;
 }
 
 .player-chips {
-    font-size: calc(10px * var(--table-scale));
+    font-size: 12px;
     color: #ffd700;
 }
 
 .player-bet {
-    font-size: calc(9px * var(--table-scale));
+    font-size: 11px;
     color: #4a90e2;
-    margin-top: calc(2px * var(--table-scale));
+    margin-top: 2px;
 }
 
 .player-cards {
     position: absolute;
     display: flex;
-    gap: calc(3px * var(--table-scale));
+    gap: 4px;
     justify-content: center;
 }
 
 .card {
-    width: calc(34px * var(--table-scale));
-    height: calc(48px * var(--table-scale));
+    width: 40px;
+    height: 56px;
     background: #fff;
-    border-radius: calc(3px * var(--table-scale));
+    border-radius: 4px;
     border: 1px solid #ccc;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: calc(14px * var(--table-scale));
+    font-size: 18px;
     font-weight: 700;
-    box-shadow: 0 calc(2px * var(--table-scale)) calc(4px * var(--table-scale)) rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .card.red {
@@ -435,13 +380,6 @@ body {
 .card.back {
     background: linear-gradient(135deg, #4a90e2 25%, #5a9ff2 25%, #5a9ff2 50%, #4a90e2 50%, #4a90e2 75%, #5a9ff2 75%);
     background-size: 8px 8px;
-}
-
-/* Table count control */
-.table-count-control {
-    display: flex;
-    align-items: center;
-    gap: 10px;
 }
 
 /* Empty Table Message */
@@ -471,6 +409,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
 }
 
 .console-header {
@@ -670,16 +609,6 @@ body {
     height: 6px;
     cursor: ns-resize;
 }
-
-/* Make sure sidebar and console are positioned for handles */
-.sidebar {
-    position: relative;
-}
-
-.console-container {
-    position: relative;
-}
-
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {

@@ -35,13 +35,6 @@
                     <button class="btn btn-danger" onclick="resetGame()">Reset</button>
                     <button class="btn btn-secondary" onclick="clearTable()">Clear Table</button>
 
-                    <div class="table-count-control">
-                        <span class="speed-label">Tables:</span>
-                        <button class="btn btn-secondary" onclick="changeTableCount(-1)">-</button>
-                        <span class="speed-value" id="tableCountValue">1</span>
-                        <button class="btn btn-secondary" onclick="changeTableCount(1)">+</button>
-                    </div>
-
                     <div class="speed-control">
                         <span class="speed-label">Speed:</span>
                         <button class="btn btn-secondary" onclick="changeSpeed(-1)">-</button>
@@ -57,8 +50,26 @@
                             <h3>No Players at Table</h3>
                             <p>Select bots from the left panel to add them to the table</p>
                         </div>
-                        <div class="tables-grid" id="tablesGrid" style="display: none;">
-                            <!-- Tables generated dynamically by JS -->
+                        <div class="poker-table" id="pokerTable" style="display: none;">
+                            <!-- Player seats (10 positions) -->
+                            <div class="player-seat pos-0 empty" data-seat="0"></div>
+                            <div class="player-seat pos-1 empty" data-seat="1"></div>
+                            <div class="player-seat pos-2 empty" data-seat="2"></div>
+                            <div class="player-seat pos-3 empty" data-seat="3"></div>
+                            <div class="player-seat pos-4 empty" data-seat="4"></div>
+                            <div class="player-seat pos-5 empty" data-seat="5"></div>
+                            <div class="player-seat pos-6 empty" data-seat="6"></div>
+                            <div class="player-seat pos-7 empty" data-seat="7"></div>
+                            <div class="player-seat pos-8 empty" data-seat="8"></div>
+                            <div class="player-seat pos-9 empty" data-seat="9"></div>
+                            <!-- Center of table -->
+                            <div class="table-center">
+                                <div class="pot-display">
+                                    <div class="pot-label">POT</div>
+                                    <div class="pot-amount" id="potAmount">0</div>
+                                </div>
+                                <div class="community-cards" id="communityCards"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -78,9 +89,9 @@
             <div class="tab-content" id="statsTab">
                 <div class="stats-view">
                     <h2 style="margin-bottom: 20px; color: #fff;">Tournament Statistics</h2>
-                    
+
                     <div class="stats-grid" id="statsGrid"></div>
-                    
+
                     <div class="chart-container">
                         <h3>Chips Over Time</h3>
                         <canvas id="chipsChart"></canvas>
