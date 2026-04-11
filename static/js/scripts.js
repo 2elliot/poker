@@ -444,7 +444,7 @@ async function doOneStep() {
             logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
             return { done: true };
         }
-        return { done: false, tableId: (data.state || {}).activeTableId };
+        return { done: false, tableId: data.tableId };
     } else {
         logToConsole(`Error: ${data.error}`, 'event-error');
         if (data.error && data.error.includes('not initialized')) {
@@ -510,15 +510,15 @@ function handleStepEvent(data) {
         syncTableAssignments(data.state);
     }
 
-    // Determine which table this event is for
-    const st = data.state || {};
-    const tid = String(st.activeTableId || '1');
+    // Determine which table this event is for.
+    // Use data.tableId (the table the event actually belongs to), NOT
+    // state.activeTableId which may already point at the *next* table.
+    const tid = String(data.tableId || '1');
     state.activeTableId = tid;
     const ts = getTableState(tid);
 
-    // Build table label for multi-table tournaments
-    const tableLabel = (st.totalTables && st.totalTables > 1 && st.activeTableId)
-        ? `[Table ${st.activeTableId}] ` : '';
+    // Always show table label in logs for clarity
+    const tableLabel = `[Table ${tid}] `;
 
     if (event === 'deal') {
         state.handInProgress = true;

@@ -762,6 +762,10 @@ def step_tournament():
 
             game = tournament_state['active_game']
 
+            # Capture which table this step belongs to BEFORE it may change
+            # (showdown mutates active_table_id to point at the next table)
+            current_table_id = tournament_state['active_table_id']
+
             # === No active hand: start a new one ===
             if game is None:
                 active_tables = {tid: table for tid, table in tournament.tables.items()
@@ -788,6 +792,7 @@ def step_tournament():
                 table = active_tables[table_id]
                 tournament_state['pending_tables'] = list(active_tables.keys())[1:]
                 tournament_state['active_table_id'] = table_id
+                current_table_id = table_id
 
                 player_ids = table.get_active_players()
                 small_blind, big_blind = table.get_current_blinds()
@@ -822,6 +827,7 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'deal',
+                    'tableId': current_table_id,
                     'phase': 'preflop',
                     'playerCards': player_cards,
                     'pot': game.pot,
@@ -853,6 +859,7 @@ def step_tournament():
                         'success': True,
                         'complete': False,
                         'event': 'community',
+                        'tableId': current_table_id,
                         'phase': 'flop',
                         'communityCards': [serialize_card(c) for c in game.community_cards],
                         'pot': game.pot,
@@ -872,6 +879,7 @@ def step_tournament():
                         'success': True,
                         'complete': False,
                         'event': 'community',
+                        'tableId': current_table_id,
                         'phase': 'turn',
                         'communityCards': [serialize_card(c) for c in game.community_cards],
                         'pot': game.pot,
@@ -891,6 +899,7 @@ def step_tournament():
                         'success': True,
                         'complete': False,
                         'event': 'community',
+                        'tableId': current_table_id,
                         'phase': 'river',
                         'communityCards': [serialize_card(c) for c in game.community_cards],
                         'pot': game.pot,
@@ -951,6 +960,7 @@ def step_tournament():
                         'success': True,
                         'complete': False,
                         'event': 'showdown',
+                        'tableId': current_table_id,
                         'winners': winners,
                         'playerChips': game.player_chips.copy(),
                         'playerHands': showdown_hands,
@@ -970,6 +980,7 @@ def step_tournament():
                     'success': True,
                     'complete': tournament.is_tournament_complete(),
                     'event': 'showdown',
+                    'tableId': current_table_id,
                     'winners': winners,
                     'playerChips': game.player_chips.copy(),
                     'playerHands': showdown_hands,
@@ -987,6 +998,7 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'waiting',
+                    'tableId': current_table_id,
                     'state': get_tournament_state_dict(tournament)
                 })
 
@@ -1003,6 +1015,7 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'waiting',
+                    'tableId': current_table_id,
                     'state': get_tournament_state_dict(tournament)
                 })
 
@@ -1013,6 +1026,7 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'waiting',
+                    'tableId': current_table_id,
                     'state': get_tournament_state_dict(tournament)
                 })
 
@@ -1031,6 +1045,7 @@ def step_tournament():
                     'success': True,
                     'complete': False,
                     'event': 'action',
+                    'tableId': current_table_id,
                     'player': player_id,
                     'action': 'fold',
                     'amount': 0,
@@ -1054,6 +1069,7 @@ def step_tournament():
                 'success': True,
                 'complete': False,
                 'event': 'action',
+                'tableId': current_table_id,
                 'player': player_id,
                 'action': action_name,
                 'amount': amount,
