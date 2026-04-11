@@ -768,29 +768,44 @@ def step_tournament():
 
             # === No active hand: start a new one ===
             if game is None:
-                active_tables = {tid: table for tid, table in tournament.tables.items()
-                               if len(table.get_active_players()) >= 2}
+                # If a previous showdown already designated the next table to
+                # play (via active_table_id), use it directly instead of
+                # rebuilding the list (which would always pick table 1).
+                preset_table_id = tournament_state['active_table_id']
+                if preset_table_id is not None:
+                    preset_table = tournament.tables.get(preset_table_id)
+                    if preset_table and len(preset_table.get_active_players()) >= 2:
+                        table_id = preset_table_id
+                        table = preset_table
+                    else:
+                        # Designated table isn't playable, clear and rebuild
+                        preset_table_id = None
 
-                if not active_tables:
-                    # No table has 2+ players. Try rebalancing to consolidate
-                    # stranded players from different tables before giving up.
-                    if len(tournament.get_active_players()) >= 2:
-                        tournament.rebalance_tables()
-                        active_tables = {tid: table for tid, table in tournament.tables.items()
-                                       if len(table.get_active_players()) >= 2}
+                if preset_table_id is None:
+                    # Starting a fresh round — find all active tables
+                    active_tables = {tid: tbl for tid, tbl in tournament.tables.items()
+                                   if len(tbl.get_active_players()) >= 2}
 
                     if not active_tables:
-                        return jsonify({
-                            'success': True,
-                            'complete': True,
-                            'event': 'tournament_complete',
-                            'state': get_tournament_state_dict(tournament)
-                        })
+                        # Try rebalancing to consolidate stranded players
+                        if len(tournament.get_active_players()) >= 2:
+                            tournament.rebalance_tables()
+                            active_tables = {tid: tbl for tid, tbl in tournament.tables.items()
+                                           if len(tbl.get_active_players()) >= 2}
 
-                # Pick first table to play
-                table_id = list(active_tables.keys())[0]
-                table = active_tables[table_id]
-                tournament_state['pending_tables'] = list(active_tables.keys())[1:]
+                        if not active_tables:
+                            return jsonify({
+                                'success': True,
+                                'complete': True,
+                                'event': 'tournament_complete',
+                                'state': get_tournament_state_dict(tournament)
+                            })
+
+                    # Pick first table to play
+                    table_id = list(active_tables.keys())[0]
+                    table = active_tables[table_id]
+                    tournament_state['pending_tables'] = list(active_tables.keys())[1:]
+
                 tournament_state['active_table_id'] = table_id
                 current_table_id = table_id
 
