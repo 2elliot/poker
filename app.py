@@ -731,6 +731,12 @@ def step_tournament():
             tournament = tournament_state['tournament']
             bot_manager = tournament_state['bot_manager']
 
+            # Diagnostic: increment step counter to trace duplicate calls
+            tournament_state.setdefault('_step_seq', 0)
+            tournament_state['_step_seq'] += 1
+            _seq = tournament_state['_step_seq']
+            logging.info(f"[STEP #{_seq}] pid={os.getpid()} game={'ACTIVE' if tournament_state['active_game'] else 'NONE'} phase={tournament_state['hand_phase']}")
+
             if tournament.is_tournament_complete():
                 # Only update stats once (not on every repeated step call)
                 if not tournament_state.get('stats_recorded'):
