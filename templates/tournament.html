@@ -1,117 +1,116 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Poker Bot Tournament</title>
-        <link rel="stylesheet" href="/static/css/styles.css">
-    </head>
-<body>
-    <div class="container">
-        <!-- Sidebar -->
-        <div class="sidebar" id="sidebar">
-            <div class="resize-handle vertical" id="sidebarResize"></div>
-            <div class="sidebar-header">
-                <h2>Available Bots</h2>
-                <p>Click to add to table</p>
-            </div>
-            <div class="bot-list" id="botList"></div>
+{% extends "base.html" %}
+
+{% block title %}Tournament - Poker Bot Tournament{% endblock %}
+{% block body_class %}page-tournament{% endblock %}
+{% block nav_tournament %}active{% endblock %}
+
+{% block content %}
+<div class="tournament-layout">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="resize-handle vertical" id="sidebarResize"></div>
+        <div class="sidebar-header">
+            <h2>Available Bots</h2>
+            <p>Click to add to table</p>
+        </div>
+        <div class="bot-list" id="botList"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="switchTab('game')">Game</button>
+            <button class="nav-tab" onclick="switchTab('stats')">Statistics</button>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Navigation Tabs -->
-            <div class="nav-tabs">
-                <button class="nav-tab active" onclick="switchTab('game')">Game</button>
-                <button class="nav-tab" onclick="switchTab('stats')">Statistics</button>
+        <!-- Game Tab -->
+        <div class="tab-content active" id="gameTab">
+            <!-- Controls -->
+            <div class="controls">
+                <button class="btn" id="playBtn" onclick="togglePlay()">Play</button>
+                <button class="btn btn-secondary" onclick="stepGame()">Step</button>
+                <button class="btn btn-danger" onclick="resetGame()">Reset</button>
+                <button class="btn btn-secondary" onclick="clearTable()">Clear Table</button>
+
+                <div class="speed-control">
+                    <span class="speed-label">Speed:</span>
+                    <button class="btn btn-secondary" onclick="changeSpeed(-1)">-</button>
+                    <span class="speed-value" id="speedValue">1x</span>
+                    <button class="btn btn-secondary" onclick="changeSpeed(1)">+</button>
+                </div>
             </div>
 
-            <!-- Game Tab -->
-            <div class="tab-content active" id="gameTab">
-                <!-- Controls -->
-                <div class="controls">
-                    <button class="btn" id="playBtn" onclick="togglePlay()">Play</button>
-                    <button class="btn btn-secondary" onclick="stepGame()">Step</button>
-                    <button class="btn btn-danger" onclick="resetGame()">Reset</button>
-                    <button class="btn btn-secondary" onclick="clearTable()">Clear Table</button>
-
-                    <div class="speed-control">
-                        <span class="speed-label">Speed:</span>
-                        <button class="btn btn-secondary" onclick="changeSpeed(-1)">-</button>
-                        <span class="speed-value" id="speedValue">1x</span>
-                        <button class="btn btn-secondary" onclick="changeSpeed(1)">+</button>
+            <!-- Game View -->
+            <div class="game-view">
+                <div class="table-container">
+                    <div id="emptyMessage" class="empty-table">
+                        <h3>No Players at Table</h3>
+                        <p>Select bots from the left panel to add them to the table</p>
                     </div>
-                </div>
-
-                <!-- Game View -->
-                <div class="game-view">
-                    <div class="table-container">
-                        <div id="emptyMessage" class="empty-table">
-                            <h3>No Players at Table</h3>
-                            <p>Select bots from the left panel to add them to the table</p>
-                        </div>
-                        <div class="poker-table" id="pokerTable" style="display: none;">
-                            <!-- Player seats (10 positions) -->
-                            <div class="player-seat pos-0 empty" data-seat="0"></div>
-                            <div class="player-seat pos-1 empty" data-seat="1"></div>
-                            <div class="player-seat pos-2 empty" data-seat="2"></div>
-                            <div class="player-seat pos-3 empty" data-seat="3"></div>
-                            <div class="player-seat pos-4 empty" data-seat="4"></div>
-                            <div class="player-seat pos-5 empty" data-seat="5"></div>
-                            <div class="player-seat pos-6 empty" data-seat="6"></div>
-                            <div class="player-seat pos-7 empty" data-seat="7"></div>
-                            <div class="player-seat pos-8 empty" data-seat="8"></div>
-                            <div class="player-seat pos-9 empty" data-seat="9"></div>
-                            <!-- Center of table -->
-                            <div class="table-center">
-                                <div class="pot-display">
-                                    <div class="pot-label">POT</div>
-                                    <div class="pot-amount" id="potAmount">0</div>
-                                </div>
-                                <div class="community-cards" id="communityCards"></div>
+                    <div class="poker-table" id="pokerTable" style="display: none;">
+                        <!-- Player seats (10 positions) -->
+                        <div class="player-seat pos-0 empty" data-seat="0"></div>
+                        <div class="player-seat pos-1 empty" data-seat="1"></div>
+                        <div class="player-seat pos-2 empty" data-seat="2"></div>
+                        <div class="player-seat pos-3 empty" data-seat="3"></div>
+                        <div class="player-seat pos-4 empty" data-seat="4"></div>
+                        <div class="player-seat pos-5 empty" data-seat="5"></div>
+                        <div class="player-seat pos-6 empty" data-seat="6"></div>
+                        <div class="player-seat pos-7 empty" data-seat="7"></div>
+                        <div class="player-seat pos-8 empty" data-seat="8"></div>
+                        <div class="player-seat pos-9 empty" data-seat="9"></div>
+                        <!-- Center of table -->
+                        <div class="table-center">
+                            <div class="pot-display">
+                                <div class="pot-label">POT</div>
+                                <div class="pot-amount" id="potAmount">0</div>
                             </div>
+                            <div class="community-cards" id="communityCards"></div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Console -->
-                <div class="console-container" id="console">
-                    <div class="resize-handle horizontal" id="consoleResize"></div>
-                    <div class="console-header">
-                        <h3>Game Console</h3>
-                        <button class="console-clear" onclick="clearConsole()">Clear</button>
-                    </div>
-                    <div class="console-content" id="consoleContent"></div>
-                </div>
             </div>
 
-            <!-- Statistics Tab -->
-            <div class="tab-content" id="statsTab">
-                <div class="stats-view">
-                    <h2 style="margin-bottom: 20px; color: #fff;">Tournament Statistics</h2>
+            <!-- Console -->
+            <div class="console-container" id="console">
+                <div class="resize-handle horizontal" id="consoleResize"></div>
+                <div class="console-header">
+                    <h3>Game Console</h3>
+                    <button class="console-clear" onclick="clearConsole()">Clear</button>
+                </div>
+                <div class="console-content" id="consoleContent"></div>
+            </div>
+        </div>
 
-                    <div class="stats-grid" id="statsGrid"></div>
+        <!-- Statistics Tab -->
+        <div class="tab-content" id="statsTab">
+            <div class="stats-view">
+                <h2 style="margin-bottom: 20px; color: #fff;">Tournament Statistics</h2>
 
-                    <div class="chart-container">
-                        <h3>Chips Over Time</h3>
-                        <canvas id="chipsChart"></canvas>
-                    </div>
+                <div class="stats-grid" id="statsGrid"></div>
+
+                <div class="chart-container">
+                    <h3>Chips Over Time</h3>
+                    <canvas id="chipsChart"></canvas>
                 </div>
             </div>
+        </div>
 
-            <!-- Status Bar -->
-            <div class="status-bar">
-                <div class="status-item">
-                    <span>Players: <span id="playerCount">0</span></span>
-                    <span>Games Played: <span id="gamesPlayed">0</span></span>
-                </div>
-                <div class="status-item">
-                    <span id="gameStatus">Ready</span>
-                </div>
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span>Players: <span id="playerCount">0</span></span>
+                <span>Games Played: <span id="gamesPlayed">0</span></span>
+            </div>
+            <div class="status-item">
+                <span id="gameStatus">Ready</span>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script src="/static/js/scripts.js"></script>
-</body>
-</html>
+{% block scripts %}
+<script src="/static/js/scripts.js"></script>
+{% endblock %}

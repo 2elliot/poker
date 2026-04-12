@@ -148,19 +148,36 @@ def load_user(user_id):
 
 
 # ============================================================================
+# TEMPLATE CONTEXT
+# ============================================================================
+
+@app.context_processor
+def inject_globals():
+    """Inject global template variables (e.g. is_admin for nav bar)"""
+    is_admin = current_user.is_authenticated and getattr(current_user, 'is_admin', False)
+    return dict(is_admin=is_admin)
+
+
+# ============================================================================
 # PUBLIC ROUTES - User bot submission and status
 # ============================================================================
 
 @app.route('/')
 def index():
-    """Main landing page - bot submission portal"""
+    """Main landing page - tournament visualization"""
+    return render_template('tournament.html')
+
+
+@app.route('/submit')
+def submit_page():
+    """Bot submission portal"""
     return render_template('submit.html')
 
 
-@app.route('/tournament')
-def tournament_page():
-    """Tournament visualization page"""
-    return render_template('tournament.html')
+@app.route('/leaderboard')
+def leaderboard_page():
+    """Leaderboard page (placeholder for now)"""
+    return render_template('leaderboard.html')
 
 
 @app.route('/api/bots', methods=['GET'])
@@ -1105,9 +1122,10 @@ if __name__ == '__main__':
     print("🚀 POKER TOURNAMENT SERVER - PRODUCTION READY")
     print("=" * 80)
     print()
-    print("📍 Server URLs:")
-    print(f"   User Portal:     http://localhost:5000/")
-    print(f"   Tournament:      http://localhost:5000/tournament")
+    print("Server URLs:")
+    print(f"   Tournament:      http://localhost:5000/")
+    print(f"   Submit Bot:      http://localhost:5000/submit")
+    print(f"   Leaderboard:     http://localhost:5000/leaderboard")
     print(f"   Admin Login:     http://localhost:5000/admin/login")
     print()
     print("💾 Data Persistence:")

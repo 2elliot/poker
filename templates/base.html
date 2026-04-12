@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Poker Bot Tournament{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <!-- Navigation Bar -->
+    <nav class="main-nav">
+        <div class="nav-brand">
+            <a href="/">Poker Bots</a>
+        </div>
+        <div class="nav-links">
+            <a href="/" class="nav-link {% block nav_tournament %}{% endblock %}">Tournament</a>
+            <a href="/submit" class="nav-link {% block nav_submit %}{% endblock %}">Submit Bot</a>
+            <a href="/leaderboard" class="nav-link {% block nav_leaderboard %}{% endblock %}">Leaderboard</a>
+            {% if is_admin %}
+            <a href="/admin/review" class="nav-link {% block nav_admin %}{% endblock %}">Admin</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Page Content -->
+    {% block content %}{% endblock %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

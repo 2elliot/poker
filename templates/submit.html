@@ -1,502 +1,134 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Submit Your Poker Bot</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a1a;
-            color: #e0e0e0;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        header {
-            background: #252525;
-            padding: 30px;
-            border-radius: 8px;
-            margin-bottom: 30px;
-            border: 2px solid #333;
-            text-align: center;
-        }
-
-        h1 {
-            color: #4a90e2;
-            margin-bottom: 10px;
-        }
-
-        .subtitle {
-            color: #888;
-            font-size: 16px;
-        }
-
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #333;
-        }
-
-        .tab {
-            padding: 15px 30px;
-            background: transparent;
-            border: none;
-            color: #888;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s;
-        }
-
-        .tab:hover {
-            color: #fff;
-        }
-
-        .tab.active {
-            color: #4a90e2;
-            border-bottom-color: #4a90e2;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .section {
-            background: #252525;
-            border: 2px solid #333;
-            border-radius: 8px;
-            padding: 30px;
-            margin-bottom: 20px;
-        }
-
-        .section h2 {
-            color: #4a90e2;
-            margin-bottom: 20px;
-            font-size: 20px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            color: #aaa;
-            font-size: 14px;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        input[type="text"],
-        input[type="email"],
-        input[type="password"],
-        textarea {
-            width: 100%;
-            padding: 12px;
-            background: #1a1a1a;
-            border: 2px solid #333;
-            border-radius: 6px;
-            color: #e0e0e0;
-            font-size: 14px;
-            font-family: 'Courier New', monospace;
-            transition: border-color 0.2s;
-        }
-
-        input[type="text"],
-        input[type="email"],
-        input[type="password"] {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        input:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #4a90e2;
-        }
-
-        textarea {
-            min-height: 400px;
-            resize: vertical;
-        }
-
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: #4a90e2;
-            color: #fff;
-        }
-
-        .btn-primary:hover {
-            background: #5a9ff2;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
-        }
-
-        .btn-primary:disabled {
-            background: #333;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-secondary {
-            background: #555;
-            color: #fff;
-        }
-
-        .btn-secondary:hover {
-            background: #666;
-        }
-
-        .alert {
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .alert.show {
-            display: block;
-        }
-
-        .alert-success {
-            background: rgba(92, 184, 92, 0.2);
-            border: 1px solid #5cb85c;
-            color: #7dff7d;
-        }
-
-        .alert-error {
-            background: rgba(217, 83, 79, 0.2);
-            border: 1px solid #d9534f;
-            color: #ff6b6b;
-        }
-
-        .alert-info {
-            background: rgba(74, 144, 226, 0.2);
-            border: 1px solid #4a90e2;
-            color: #7db4ff;
-        }
-
-        .code-template {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 6px;
-            padding: 15px;
-            margin: 15px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            overflow-x: auto;
-        }
-
-        .code-template pre {
-            margin: 0;
-            white-space: pre-wrap;
-        }
-
-        .helper-text {
-            font-size: 12px;
-            color: #888;
-            margin-top: 5px;
-        }
-
-        .submission-card {
-            background: #2a2a2a;
-            border: 2px solid #333;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 15px;
-        }
-
-        .submission-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .submission-name {
-            font-size: 18px;
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .status-badge {
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-pending {
-            background: #f0ad4e;
-            color: #000;
-        }
-
-        .status-approved {
-            background: #5cb85c;
-            color: #fff;
-        }
-
-        .status-rejected {
-            background: #d9534f;
-            color: #fff;
-        }
-
-        .status-revision {
-            background: #5bc0de;
-            color: #000;
-        }
-
-        .submission-meta {
-            color: #888;
-            font-size: 13px;
-            margin-bottom: 10px;
-        }
-
-        .review-notes {
-            background: #1a1a1a;
-            border-left: 3px solid #4a90e2;
-            padding: 12px;
-            margin-top: 10px;
-            font-size: 13px;
-        }
-
-        .review-note {
-            margin: 8px 0;
-        }
-
-        .review-note-date {
-            color: #888;
-            font-size: 11px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #666;
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #fff;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .instructions {
-            background: #2a2a2a;
-            border-left: 4px solid #4a90e2;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 4px;
-        }
-
-        .instructions h3 {
-            color: #4a90e2;
-            margin-bottom: 15px;
-            font-size: 16px;
-        }
-
-        .instructions ol {
-            margin-left: 20px;
-        }
-
-        .instructions li {
-            margin: 10px 0;
-            color: #ccc;
-        }
-
-        .instructions code {
-            background: #1a1a1a;
-            padding: 2px 6px;
-            border-radius: 3px;
-            color: #4a90e2;
-            font-size: 12px;
-        }
-
-        .tournament-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 12px 24px;
-            background: #5cb85c;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-
-        .tournament-link:hover {
-            background: #6cc76c;
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🤖 Poker Bot Submission Portal</h1>
-            <p class="subtitle">Upload your bot, get it reviewed, and compete in tournaments!</p>
-        </header>
-
-        <div class="tabs">
-            <button class="tab active" onclick="switchTab('submit')">Submit Bot</button>
-            <button class="tab" onclick="switchTab('status')">My Submissions</button>
-            <button class="tab" onclick="switchTab('help')">Help & Template</button>
-        </div>
-
-        <!-- SUBMIT TAB -->
-        <div id="submitTab" class="tab-content active">
-            <div class="section">
-                <h2>Submit Your Poker Bot</h2>
-                
-                <div id="submitAlert" class="alert"></div>
-
-                <form id="submitForm" onsubmit="submitBot(event)">
-                    <div class="form-group">
-                        <label for="botName">Bot Name *</label>
-                        <input 
-                            type="text" 
-                            id="botName" 
-                            placeholder="e.g., AggressivePlayer"
-                            required
-                        >
-                        <div class="helper-text">Choose a unique name for your bot</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="email">Your Email *</label>
-                        <input 
-                            type="email" 
-                            id="email" 
-                            placeholder="your@email.com"
-                            required
-                        >
-                        <div class="helper-text">We'll notify you when your bot is reviewed</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="password">Bot Password *</label>
-                        <input 
-                            type="password" 
-                            id="password" 
-                            placeholder="At least 12 characters"
-                            minlength="12"
-                            required
-                        >
-                        <div class="helper-text">
-                            You'll need this password to update your bot later. 
-                            <strong>Save it somewhere safe!</strong>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="botCode">Bot Code *</label>
-                        <textarea 
-                            id="botCode" 
-                            placeholder="Paste your Python code here..."
-                            required
-                        ></textarea>
-                        <div class="helper-text">
-                            Your bot must inherit from PokerBotAPI. See the Help tab for a template.
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary" id="submitBtn">
-                        Submit for Review
-                    </button>
-                </form>
-            </div>
-
-            <div class="instructions">
-                <h3>📋 What Happens Next?</h3>
-                <ol>
-                    <li>Your bot code is submitted for review</li>
-                    <li>Our admin will check it for security issues</li>
-                    <li>You'll receive an email when it's approved or if changes are needed</li>
-                    <li>Once approved, your bot will be available in tournaments!</li>
-                    <li>You can then test it against other approved bots</li>
-                </ol>
-            </div>
-        </div>
-
-        <!-- STATUS TAB -->
-        <div id="statusTab" class="tab-content">
-            <div class="section">
-                <h2>My Submissions</h2>
-                
-                <div id="statusAlert" class="alert"></div>
+{% extends "base.html" %}
+
+{% block title %}Submit Bot - Poker Bot Tournament{% endblock %}
+{% block nav_submit %}active{% endblock %}
+
+{% block content %}
+<div class="page-content">
+    <div class="page-header">
+        <h1>Poker Bot Submission Portal</h1>
+        <p class="subtitle">Upload your bot, get it reviewed, and compete in tournaments!</p>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('submit')">Submit Bot</button>
+        <button class="tab" onclick="switchTab('status')">My Submissions</button>
+        <button class="tab" onclick="switchTab('help')">Help & Template</button>
+    </div>
+
+    <!-- SUBMIT TAB -->
+    <div id="submitTab" class="tab-content active" style="display: block; overflow: visible;">
+        <div class="section">
+            <h2>Submit Your Poker Bot</h2>
+
+            <div id="submitAlert" class="alert"></div>
+
+            <form id="submitForm" onsubmit="submitBot(event)">
+                <div class="form-group">
+                    <label for="botName">Bot Name *</label>
+                    <input
+                        type="text"
+                        id="botName"
+                        placeholder="e.g., AggressivePlayer"
+                        required
+                    >
+                    <div class="helper-text">Choose a unique name for your bot</div>
+                </div>
 
                 <div class="form-group">
-                    <label for="checkEmail">Enter your email to check submission status:</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input 
-                            type="email" 
-                            id="checkEmail" 
-                            placeholder="your@email.com"
-                            style="flex: 1;"
-                        >
-                        <button class="btn btn-primary" onclick="checkSubmissions()">
-                            Check Status
-                        </button>
+                    <label for="email">Your Email *</label>
+                    <input
+                        type="email"
+                        id="email"
+                        placeholder="your@email.com"
+                        required
+                    >
+                    <div class="helper-text">We'll notify you when your bot is reviewed</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Bot Password *</label>
+                    <input
+                        type="password"
+                        id="password"
+                        placeholder="At least 12 characters"
+                        minlength="12"
+                        required
+                    >
+                    <div class="helper-text">
+                        You'll need this password to update your bot later.
+                        <strong>Save it somewhere safe!</strong>
                     </div>
                 </div>
 
-                <div id="submissionsList"></div>
-            </div>
+                <div class="form-group">
+                    <label for="botCode">Bot Code *</label>
+                    <textarea
+                        id="botCode"
+                        placeholder="Paste your Python code here..."
+                        required
+                    ></textarea>
+                    <div class="helper-text">
+                        Your bot must inherit from PokerBotAPI. See the Help tab for a template.
+                    </div>
+                </div>
 
-            <a href="/tournament" class="tournament-link">
-                🏆 Go to Tournament Arena
-            </a>
+                <button type="submit" class="btn" id="submitBtn">
+                    Submit for Review
+                </button>
+            </form>
         </div>
 
-        <!-- HELP TAB -->
-        <div id="helpTab" class="tab-content">
-            <div class="section">
-                <h2>Bot Template & Instructions</h2>
+        <div class="instructions">
+            <h3>What Happens Next?</h3>
+            <ol>
+                <li>Your bot code is submitted for review</li>
+                <li>Our admin will check it for security issues</li>
+                <li>You'll receive an email when it's approved or if changes are needed</li>
+                <li>Once approved, your bot will be available in tournaments!</li>
+                <li>You can then test it against other approved bots</li>
+            </ol>
+        </div>
+    </div>
 
-                <h3 style="color: #4a90e2; margin: 20px 0 10px 0;">Basic Bot Template</h3>
-                <p style="color: #aaa; margin-bottom: 15px;">
-                    Copy this template and modify the <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 3px;">get_action</code> method to implement your strategy:
-                </p>
+    <!-- STATUS TAB -->
+    <div id="statusTab" class="tab-content" style="overflow: visible;">
+        <div class="section">
+            <h2>My Submissions</h2>
 
-                <div class="code-template">
-                    <pre>from bot_api import PokerBotAPI, PlayerAction
+            <div id="statusAlert" class="alert"></div>
+
+            <div class="form-group">
+                <label for="checkEmail">Enter your email to check submission status:</label>
+                <div style="display: flex; gap: 10px;">
+                    <input
+                        type="email"
+                        id="checkEmail"
+                        placeholder="your@email.com"
+                        style="flex: 1;"
+                    >
+                    <button class="btn" onclick="checkSubmissions()">
+                        Check Status
+                    </button>
+                </div>
+            </div>
+
+            <div id="submissionsList"></div>
+        </div>
+    </div>
+
+    <!-- HELP TAB -->
+    <div id="helpTab" class="tab-content" style="overflow: visible;">
+        <div class="section">
+            <h2>Bot Template & Instructions</h2>
+
+            <h3 style="color: #4a90e2; margin: 20px 0 10px 0;">Basic Bot Template</h3>
+            <p style="color: #aaa; margin-bottom: 15px;">
+                Copy this template and modify the <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 3px;">get_action</code> method to implement your strategy:
+            </p>
+
+            <div class="code-template">
+                <pre>from bot_api import PokerBotAPI, PlayerAction
 from engine.poker_game import GameState
 from engine.cards import Card
 from typing import List, Dict, Any
@@ -505,265 +137,259 @@ class MyBot(PokerBotAPI):
     """
     Your custom poker bot
     """
-    
+
     def __init__(self, name: str):
         super().__init__(name)
         # Add any initialization here
         self.hands_played = 0
-    
-    def get_action(self, game_state: GameState, hole_cards: List[Card], 
+
+    def get_action(self, game_state: GameState, hole_cards: List[Card],
                    legal_actions: List[PlayerAction], min_bet: int, max_bet: int):
         """
         Decide what action to take
-        
+
         Args:
             game_state: Current game state (pot, community cards, etc.)
             hole_cards: Your two hole cards
             legal_actions: List of actions you can take
             min_bet: Minimum bet amount for raises
             max_bet: Maximum you can bet (your chips + current bet)
-            
+
         Returns:
             tuple: (PlayerAction, amount)
         """
-        
+
         # Example: Simple strategy - always call if possible
         if PlayerAction.CALL in legal_actions:
             return PlayerAction.CALL, 0
-        
+
         if PlayerAction.CHECK in legal_actions:
             return PlayerAction.CHECK, 0
-            
+
         return PlayerAction.FOLD, 0
-    
+
     def hand_complete(self, game_state: GameState, hand_result: Dict[str, Any]):
         """
         Called when a hand is complete
         Use this to learn from results
         """
         self.hands_played += 1
-        
+
         if 'winners' in hand_result and self.name in hand_result['winners']:
-            self.logger.info(f"Won hand #{self.hands_played}!")
-</pre>
-                </div>
-
-                <div class="instructions">
-                    <h3>📚 Available Information</h3>
-                    <p style="margin-bottom: 10px; color: #ccc;">In your <code>get_action</code> method, you have access to:</p>
-                    <ul style="margin-left: 20px; color: #ccc;">
-                        <li><code>game_state.pot</code> - Current pot size</li>
-                        <li><code>game_state.community_cards</code> - Cards on the table</li>
-                        <li><code>game_state.current_bet</code> - Current bet to match</li>
-                        <li><code>game_state.player_chips</code> - Everyone's chip counts</li>
-                        <li><code>game_state.round_name</code> - "preflop", "flop", "turn", or "river"</li>
-                        <li><code>hole_cards</code> - Your two private cards</li>
-                        <li><code>legal_actions</code> - What you can do (FOLD, CHECK, CALL, RAISE, ALL_IN)</li>
-                    </ul>
-                </div>
-
-                <div class="instructions">
-                    <h3>⚠️ Important Rules</h3>
-                    <ul style="margin-left: 20px; color: #ccc;">
-                        <li>Your bot MUST inherit from <code>PokerBotAPI</code></li>
-                        <li>You MUST implement <code>get_action</code> and <code>hand_complete</code></li>
-                        <li>NO file operations (open, read, write)</li>
-                        <li>NO network operations (requests, urllib)</li>
-                        <li>NO system commands (os.system, subprocess)</li>
-                        <li>NO dynamic code execution (eval, exec)</li>
-                        <li>Keep your code under 500 lines</li>
-                        <li>Your bot has 10 seconds to make each decision</li>
-                    </ul>
-                </div>
-
-                <button class="btn btn-primary" onclick="copyTemplate()">
-                    📋 Copy Template to Clipboard
-                </button>
+            self.logger.info(f"Won hand #{self.hands_played}!")</pre>
             </div>
+
+            <div class="instructions">
+                <h3>Available Information</h3>
+                <p style="margin-bottom: 10px; color: #ccc;">In your <code>get_action</code> method, you have access to:</p>
+                <ul style="margin-left: 20px; color: #ccc;">
+                    <li><code>game_state.pot</code> - Current pot size</li>
+                    <li><code>game_state.community_cards</code> - Cards on the table</li>
+                    <li><code>game_state.current_bet</code> - Current bet to match</li>
+                    <li><code>game_state.player_chips</code> - Everyone's chip counts</li>
+                    <li><code>game_state.round_name</code> - "preflop", "flop", "turn", or "river"</li>
+                    <li><code>hole_cards</code> - Your two private cards</li>
+                    <li><code>legal_actions</code> - What you can do (FOLD, CHECK, CALL, RAISE, ALL_IN)</li>
+                </ul>
+            </div>
+
+            <div class="instructions">
+                <h3>Important Rules</h3>
+                <ul style="margin-left: 20px; color: #ccc;">
+                    <li>Your bot MUST inherit from <code>PokerBotAPI</code></li>
+                    <li>You MUST implement <code>get_action</code> and <code>hand_complete</code></li>
+                    <li>NO file operations (open, read, write)</li>
+                    <li>NO network operations (requests, urllib)</li>
+                    <li>NO system commands (os.system, subprocess)</li>
+                    <li>NO dynamic code execution (eval, exec)</li>
+                    <li>Keep your code under 500 lines</li>
+                    <li>Your bot has 10 seconds to make each decision</li>
+                </ul>
+            </div>
+
+            <button class="btn" onclick="copyTemplate()">
+                Copy Template to Clipboard
+            </button>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script>
-        function switchTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
+{% block scripts %}
+<script>
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
 
-            // Show selected tab
-            if (tabName === 'submit') {
-                document.getElementById('submitTab').classList.add('active');
-                document.querySelectorAll('.tab')[0].classList.add('active');
-            } else if (tabName === 'status') {
-                document.getElementById('statusTab').classList.add('active');
-                document.querySelectorAll('.tab')[1].classList.add('active');
-            } else if (tabName === 'help') {
-                document.getElementById('helpTab').classList.add('active');
-                document.querySelectorAll('.tab')[2].classList.add('active');
-            }
+        if (tabName === 'submit') {
+            document.getElementById('submitTab').style.display = 'block';
+            document.querySelectorAll('.tab')[0].classList.add('active');
+        } else if (tabName === 'status') {
+            document.getElementById('statusTab').style.display = 'block';
+            document.querySelectorAll('.tab')[1].classList.add('active');
+        } else if (tabName === 'help') {
+            document.getElementById('helpTab').style.display = 'block';
+            document.querySelectorAll('.tab')[2].classList.add('active');
         }
+    }
 
-        function showAlert(elementId, message, type) {
-            const alert = document.getElementById(elementId);
-            alert.className = `alert alert-${type} show`;
-            alert.textContent = message;
-            
-            setTimeout(() => {
-                alert.classList.remove('show');
-            }, 5000);
-        }
+    function showAlert(elementId, message, type) {
+        const alert = document.getElementById(elementId);
+        alert.className = `alert alert-${type} show`;
+        alert.textContent = message;
 
-        async function submitBot(event) {
-            event.preventDefault();
-            
-            const submitBtn = document.getElementById('submitBtn');
-            const originalText = submitBtn.textContent;
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting...';
+        setTimeout(() => {
+            alert.classList.remove('show');
+        }, 5000);
+    }
 
-            const botName = document.getElementById('botName').value;
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const botCode = document.getElementById('botCode').value;
+    async function submitBot(event) {
+        event.preventDefault();
 
-            try {
-                const response = await fetch('/api/bots/submit', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        bot_name: botName,
-                        email: email,
-                        password: password,
-                        bot_code: botCode
-                    })
-                });
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting...';
 
-                const data = await response.json();
+        const botName = document.getElementById('botName').value;
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const botCode = document.getElementById('botCode').value;
 
-                if (data.success) {
-                    showAlert('submitAlert', 
-                        `✓ ${data.message || 'Bot submitted successfully! Check your email for updates.'}`, 
-                        'success'
-                    );
-                    
-                    // Clear form
-                    document.getElementById('submitForm').reset();
-                    
-                    // Switch to status tab after 2 seconds
-                    setTimeout(() => {
-                        switchTab('status');
-                        document.getElementById('checkEmail').value = email;
-                        checkSubmissions();
-                    }, 2000);
-                } else {
-                    showAlert('submitAlert', 
-                        `✗ Error: ${data.error || 'Submission failed'}`, 
-                        'error'
-                    );
-                }
-            } catch (error) {
-                console.error('Submission error:', error);
-                showAlert('submitAlert', 
-                    '✗ Connection error. Please try again.', 
+        try {
+            const response = await fetch('/api/bots/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    bot_name: botName,
+                    email: email,
+                    password: password,
+                    bot_code: botCode
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('submitAlert',
+                    `Bot submitted successfully! Check your email for updates.`,
+                    'success'
+                );
+                document.getElementById('submitForm').reset();
+                setTimeout(() => {
+                    switchTab('status');
+                    document.getElementById('checkEmail').value = email;
+                    checkSubmissions();
+                }, 2000);
+            } else {
+                showAlert('submitAlert',
+                    `Error: ${data.error || 'Submission failed'}`,
                     'error'
                 );
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
             }
+        } catch (error) {
+            console.error('Submission error:', error);
+            showAlert('submitAlert',
+                'Connection error. Please try again.',
+                'error'
+            );
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    }
+
+    async function checkSubmissions() {
+        const email = document.getElementById('checkEmail').value;
+
+        if (!email) {
+            showAlert('statusAlert', 'Please enter your email', 'error');
+            return;
         }
 
-        async function checkSubmissions() {
-            const email = document.getElementById('checkEmail').value;
-            
-            if (!email) {
-                showAlert('statusAlert', 'Please enter your email', 'error');
-                return;
-            }
+        const listElement = document.getElementById('submissionsList');
+        listElement.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>';
 
-            const listElement = document.getElementById('submissionsList');
-            listElement.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>';
+        try {
+            const response = await fetch(`/api/bots/my-submissions?email=${encodeURIComponent(email)}`);
+            const data = await response.json();
 
-            try {
-                const response = await fetch(`/api/bots/my-submissions?email=${encodeURIComponent(email)}`);
-                const data = await response.json();
+            if (data.success && data.submissions.length > 0) {
+                listElement.innerHTML = data.submissions.map(sub => {
+                    const statusClass = {
+                        'pending_review': 'pending',
+                        'approved': 'approved',
+                        'rejected': 'rejected',
+                        'revision_requested': 'revision'
+                    }[sub.status] || 'pending';
 
-                if (data.success && data.submissions.length > 0) {
-                    listElement.innerHTML = data.submissions.map(sub => {
-                        const statusClass = {
-                            'pending_review': 'pending',
-                            'approved': 'approved',
-                            'rejected': 'rejected',
-                            'revision_requested': 'revision'
-                        }[sub.status] || 'pending';
+                    const statusText = {
+                        'pending_review': 'Pending Review',
+                        'approved': 'Approved',
+                        'rejected': 'Rejected',
+                        'revision_requested': 'Revision Requested'
+                    }[sub.status] || sub.status;
 
-                        const statusText = {
-                            'pending_review': 'Pending Review',
-                            'approved': 'Approved',
-                            'rejected': 'Rejected',
-                            'revision_requested': 'Revision Requested'
-                        }[sub.status] || sub.status;
-
-                        let notesHtml = '';
-                        if (sub.review_notes && sub.review_notes.length > 0) {
-                            notesHtml = '<div class="review-notes">';
-                            notesHtml += '<strong>Review Notes:</strong>';
-                            sub.review_notes.forEach(note => {
-                                notesHtml += `
-                                    <div class="review-note">
-                                        <div class="review-note-date">${new Date(note.date).toLocaleString()}</div>
-                                        <div>${note.action}: ${note.notes}</div>
-                                    </div>
-                                `;
-                            });
-                            notesHtml += '</div>';
-                        }
-
-                        return `
-                            <div class="submission-card">
-                                <div class="submission-header">
-                                    <div class="submission-name">${sub.bot_name}</div>
-                                    <span class="status-badge status-${statusClass}">${statusText}</span>
+                    let notesHtml = '';
+                    if (sub.review_notes && sub.review_notes.length > 0) {
+                        notesHtml = '<div class="review-notes">';
+                        notesHtml += '<strong>Review Notes:</strong>';
+                        sub.review_notes.forEach(note => {
+                            notesHtml += `
+                                <div class="review-note">
+                                    <div class="review-note-date">${new Date(note.date).toLocaleString()}</div>
+                                    <div>${note.action}: ${note.notes}</div>
                                 </div>
-                                <div class="submission-meta">
-                                    Submitted: ${new Date(sub.submission_date).toLocaleString()}
-                                    ${sub.revision_count > 0 ? ` • Revisions: ${sub.revision_count}` : ''}
-                                </div>
-                                ${notesHtml}
+                            `;
+                        });
+                        notesHtml += '</div>';
+                    }
+
+                    return `
+                        <div class="submission-card">
+                            <div class="submission-header">
+                                <div class="submission-name">${sub.bot_name}</div>
+                                <span class="status-badge status-${statusClass}">${statusText}</span>
                             </div>
-                        `;
-                    }).join('');
-                } else {
-                    listElement.innerHTML = `
-                        <div class="empty-state">
-                            <h3>No submissions found</h3>
-                            <p>You haven't submitted any bots yet, or the email doesn't match.</p>
+                            <div class="submission-meta">
+                                Submitted: ${new Date(sub.submission_date).toLocaleString()}
+                                ${sub.revision_count > 0 ? ` | Revisions: ${sub.revision_count}` : ''}
+                            </div>
+                            ${notesHtml}
                         </div>
                     `;
-                }
-            } catch (error) {
-                console.error('Error checking submissions:', error);
-                showAlert('statusAlert', 'Error loading submissions', 'error');
-                listElement.innerHTML = '';
+                }).join('');
+            } else {
+                listElement.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No submissions found</h3>
+                        <p>You haven't submitted any bots yet, or the email doesn't match.</p>
+                    </div>
+                `;
             }
+        } catch (error) {
+            console.error('Error checking submissions:', error);
+            showAlert('statusAlert', 'Error loading submissions', 'error');
+            listElement.innerHTML = '';
         }
+    }
 
-        function copyTemplate() {
-            const template = document.querySelector('.code-template pre').textContent;
-            navigator.clipboard.writeText(template).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = '✓ Copied!';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 2000);
-            });
-        }
-    </script>
-</body>
-</html>
+    function copyTemplate() {
+        const template = document.querySelector('.code-template pre').textContent;
+        navigator.clipboard.writeText(template).then(() => {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        });
+    }
+</script>
+{% endblock %}
