@@ -23,11 +23,9 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
-from backend.tournament import TournamentSettings, TournamentType
+from backend.tournament import TournamentSettings, TournamentType, PokerTournament
 from backend.bot_manager import BotManager
 from backend.engine.poker_game import PokerGame, PlayerAction
-from backend.tournament import PokerTournament
-from backend.engine.cards import Card
 
 # Import security systems
 from secure_admin_auth import AdminAuthSystem, User
@@ -530,9 +528,6 @@ def serialize_card(card):
     return {'value': rank_str[card.rank.value], 'suit': card.suit.value}
 
 
-INIT_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs', 'tournament_init.json')
-
-
 def _clear_hand_state():
     """Reset the step-by-step hand state"""
     tournament_state['hand_phase'] = None
@@ -540,110 +535,12 @@ def _clear_hand_state():
     tournament_state['stats_recorded'] = False
 
 
-def _build_tournament(init_config):
-    """Build tournament + bot_manager from an init config dict.
-    This is the single source of truth for creating tournament state
-    so that both init and lazy-recovery use the same logic.
-    """
-    from backend.bot_manager import BotWrapper
-
-    settings = TournamentSettings(
-        tournament_type=TournamentType.FREEZE_OUT,
-        starting_chips=init_config.get('starting_chips', 1000),
-        small_blind=init_config.get('small_blind', 10),
-        big_blind=init_config.get('big_blind', 20),
-        time_limit_per_action=10.0,
-        blind_increase_interval=init_config.get('blind_increase_interval', 10),
-        blind_increase_factor=1.5
-    )
-
-    bot_manager = BotManager("players", 10.0)
-    bot_manager.bots = {}
-
-    player_names = []
-    bot_count = {}
-
-    for bot_data in init_config.get('bots', []):
-        if isinstance(bot_data, dict):
-            bot_name = bot_data.get('id') or bot_data.get('name')
-        else:
-            bot_name = bot_data
-
-        if not bot_name:
-            continue
-
-        if MASTER_PASSWORD is None:
-            continue
-        bot_instance = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
-        if bot_instance is None:
-            continue
-
-        if bot_name not in bot_count:
-            bot_count[bot_name] = 0
-        bot_count[bot_name] += 1
-
-        if bot_count[bot_name] > 1:
-            player_name = f"{bot_name}_{bot_count[bot_name]}"
-            unique_bot = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
-            if unique_bot is None:
-                continue
-            unique_bot.name = player_name
-        else:
-            player_name = bot_name
-            unique_bot = bot_instance
-
-        player_names.append(player_name)
-        bot_wrapper = BotWrapper(player_name, unique_bot, 10.0)
-        bot_manager.bots[player_name] = bot_wrapper
-
-    if len(player_names) < 2:
-        return None, None, None
-
-    # Force all players onto a single table
-    settings.max_players_per_table = len(player_names)
-
-    tournament = PokerTournament(player_names, settings)
-    return tournament, bot_manager, settings
-
-
-def _ensure_tournament():
-    """Ensure tournament_state has a live tournament.
-    If it was lost (e.g. process respawn), rebuild from saved init config.
-    Must be called while holding state_lock.
-    Returns True if tournament is available, False otherwise.
-    """
-    if tournament_state['tournament'] is not None:
-        return True
-
-    # Try to restore from saved init config
-    if not os.path.exists(INIT_CONFIG_FILE):
-        return False
-
-    try:
-        with open(INIT_CONFIG_FILE, 'r') as f:
-            init_config = json.load(f)
-
-        tournament, bot_manager, settings = _build_tournament(init_config)
-        if tournament is None:
-            return False
-
-        tournament_state['tournament'] = tournament
-        tournament_state['bot_manager'] = bot_manager
-        tournament_state['settings'] = settings
-        _clear_hand_state()
-
-        logging.info(f"Tournament restored from saved config with "
-                    f"{len(tournament.players)} bots (pid={os.getpid()})")
-        return True
-    except Exception as e:
-        logging.error(f"Failed to restore tournament: {e}")
-        return False
-
-
 @app.route('/api/tournament/init', methods=['POST'])
 def initialize_tournament():
     """Initialize a new tournament with APPROVED bots only"""
     try:
+        from backend.bot_manager import BotWrapper
+
         data = request.json
         selected_bot_names = data.get('bots', [])
 
@@ -653,26 +550,67 @@ def initialize_tournament():
                 'error': 'Need at least 2 bots to start a tournament'
             }), 400
 
-        # Save init config to disk so step endpoint can restore if needed
-        init_config = {
-            'bots': selected_bot_names,
-            'starting_chips': data.get('starting_chips', 1000),
-            'small_blind': data.get('small_blind', 10),
-            'big_blind': data.get('big_blind', 20),
-            'blind_increase_interval': data.get('blind_increase_interval', 10),
-        }
-        with open(INIT_CONFIG_FILE, 'w') as f:
-            json.dump(init_config, f)
+        settings = TournamentSettings(
+            tournament_type=TournamentType.FREEZE_OUT,
+            starting_chips=data.get('starting_chips', 1000),
+            small_blind=data.get('small_blind', 10),
+            big_blind=data.get('big_blind', 20),
+            time_limit_per_action=10.0,
+            blind_increase_interval=data.get('blind_increase_interval', 10),
+            blind_increase_factor=1.5
+        )
+
+        bot_manager = BotManager("players", 10.0)
+        bot_manager.bots = {}
+
+        player_names = []
+        bot_count = {}
+
+        for bot_data in selected_bot_names:
+            if isinstance(bot_data, dict):
+                bot_name = bot_data.get('id') or bot_data.get('name')
+            else:
+                bot_name = bot_data
+
+            if not bot_name:
+                continue
+
+            if MASTER_PASSWORD is None:
+                continue
+            bot_instance = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
+            if bot_instance is None:
+                continue
+
+            if bot_name not in bot_count:
+                bot_count[bot_name] = 0
+            bot_count[bot_name] += 1
+
+            if bot_count[bot_name] > 1:
+                player_name = f"{bot_name}_{bot_count[bot_name]}"
+                unique_bot = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
+                if unique_bot is None:
+                    continue
+                unique_bot.name = player_name
+            else:
+                player_name = bot_name
+                unique_bot = bot_instance
+
+            player_names.append(player_name)
+            bot_wrapper = BotWrapper(player_name, unique_bot, 10.0)
+            bot_manager.bots[player_name] = bot_wrapper
+
+        if len(player_names) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to load enough bots'
+            }), 400
+
+        # Force all players onto a single table
+        settings.max_players_per_table = len(player_names)
+
+        tournament = PokerTournament(player_names, settings)
 
         with state_lock:
-            tournament, bot_manager, settings = _build_tournament(init_config)
-
-            if tournament is None:
-                return jsonify({
-                    'success': False,
-                    'error': 'Failed to load enough bots'
-                }), 400
-
             tournament_state['bot_manager'] = bot_manager
             tournament_state['tournament'] = tournament
             tournament_state['settings'] = settings
@@ -720,9 +658,7 @@ def step_tournament():
     """
     try:
         with state_lock:
-            # Lazy restore: if tournament was lost (server restart, process respawn),
-            # rebuild it from the saved init config file.
-            if not _ensure_tournament():
+            if tournament_state['tournament'] is None:
                 return jsonify({
                     'success': False,
                     'error': 'Tournament not initialized'
@@ -730,12 +666,6 @@ def step_tournament():
 
             tournament = tournament_state['tournament']
             bot_manager = tournament_state['bot_manager']
-
-            # Diagnostic: increment step counter to trace duplicate calls
-            tournament_state.setdefault('_step_seq', 0)
-            tournament_state['_step_seq'] += 1
-            _seq = tournament_state['_step_seq']
-            logging.info(f"[STEP #{_seq}] pid={os.getpid()} game={'ACTIVE' if tournament_state['active_game'] else 'NONE'} phase={tournament_state['hand_phase']}")
 
             if tournament.is_tournament_complete():
                 # Only update stats once (not on every repeated step call)
@@ -1040,7 +970,7 @@ def get_tournament_state():
     """Get current tournament state"""
     try:
         with state_lock:
-            if not _ensure_tournament():
+            if tournament_state['tournament'] is None:
                 return jsonify({
                     'success': False,
                     'error': 'Tournament not initialized'
@@ -1099,10 +1029,6 @@ def reset_tournament():
             tournament_state['bot_manager'] = None
             tournament_state['settings'] = None
             _clear_hand_state()
-
-            # Remove saved init config so lazy restore won't recreate
-            if os.path.exists(INIT_CONFIG_FILE):
-                os.remove(INIT_CONFIG_FILE)
 
             # Clear logs
             while not tournament_state['log_queue'].empty():

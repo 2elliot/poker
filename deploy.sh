@@ -117,7 +117,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
-ExecStart=$PROJECT_DIR/venv/bin/gunicorn --chdir $APP_DIR -w 4 -b 127.0.0.1:5000 app:app
+ExecStart=$PROJECT_DIR/venv/bin/gunicorn --chdir $APP_DIR -w 1 --threads 4 -b 127.0.0.1:5000 app:app
 Restart=always
 RestartSec=10
 
