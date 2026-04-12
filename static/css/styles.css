@@ -69,6 +69,19 @@ body {
     background: rgba(74, 144, 226, 0.1);
 }
 
+.nav-user {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-username {
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
 /* ============================================================================
    SHARED COMPONENTS - BUTTONS
    ============================================================================ */

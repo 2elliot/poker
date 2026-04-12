@@ -21,7 +21,22 @@
             <a href="/admin/review" class="nav-link {% block nav_admin %}{% endblock %}">Admin</a>
             {% endif %}
         </div>
+        <div class="nav-user">
+            {% if current_username %}
+            <span class="nav-username">{{ current_username }}</span>
+            <a href="#" class="nav-link" onclick="logout()">Logout</a>
+            {% else %}
+            <a href="/login" class="nav-link">Login</a>
+            {% endif %}
+        </div>
     </nav>
+
+    <script>
+    async function logout() {
+        await fetch('/api/user/logout', { method: 'POST' });
+        window.location.reload();
+    }
+    </script>
 
     <!-- Page Content -->
     {% block content %}{% endblock %}

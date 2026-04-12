@@ -28,7 +28,8 @@ from backend.bot_manager import BotManager
 from backend.engine.poker_game import PokerGame, PlayerAction
 
 # Import security systems
-from secure_admin_auth import AdminAuthSystem, User
+from secure_admin_auth import AdminAuthSystem
+from user_auth import UserAuthSystem, User
 from bot_approval_system import BotReviewSystem
 from secure_bot_storage import SecureBotStorage
 
@@ -63,6 +64,7 @@ def unauthorized():
 
 # Initialize systems - ALL DATA PERSISTS
 auth_system = AdminAuthSystem()
+user_system = UserAuthSystem()
 review_system = BotReviewSystem()
 bot_storage = SecureBotStorage()
 
@@ -140,7 +142,11 @@ logging.getLogger().addHandler(file_handler)
 
 @login_manager.user_loader
 def load_user(user_id):
-    """Flask-Login user loader"""
+    """Flask-Login user loader — handles both admin and regular users"""
+    # Regular users have "user:" prefix
+    if user_id.startswith("user:"):
+        return user_system.get_user(user_id)
+    # Otherwise check admin accounts
     data = auth_system._load_auth_data()
     if user_id in data["admins"]:
         return User(user_id, user_id, is_admin=True)
@@ -153,9 +159,10 @@ def load_user(user_id):
 
 @app.context_processor
 def inject_globals():
-    """Inject global template variables (e.g. is_admin for nav bar)"""
+    """Inject global template variables for nav bar"""
     is_admin = current_user.is_authenticated and getattr(current_user, 'is_admin', False)
-    return dict(is_admin=is_admin)
+    username = current_user.username if current_user.is_authenticated else None
+    return dict(is_admin=is_admin, current_username=username)
 
 
 # ============================================================================
@@ -178,6 +185,64 @@ def submit_page():
 def leaderboard_page():
     """Leaderboard page (placeholder for now)"""
     return render_template('leaderboard.html')
+
+
+@app.route('/login')
+def user_login_page():
+    """User login/register page"""
+    if current_user.is_authenticated:
+        return redirect(url_for('submit_page'))
+    return render_template('login.html')
+
+
+@app.route('/api/user/register', methods=['POST'])
+def user_register():
+    """Register a new user account"""
+    data = request.json
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    if not username or not password:
+        return jsonify({"success": False, "error": "Username and password required"}), 400
+
+    result = user_system.register(username, password)
+
+    if result["success"]:
+        # Auto-login after registration
+        auth_result = user_system.authenticate(username, password)
+        if auth_result["success"]:
+            login_user(auth_result["user"], remember=True)
+            session.permanent = True
+        return jsonify({"success": True, "message": "Account created successfully"})
+    else:
+        return jsonify(result), 400
+
+
+@app.route('/api/user/login', methods=['POST'])
+def user_login():
+    """User login endpoint"""
+    data = request.json
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    if not username or not password:
+        return jsonify({"success": False, "error": "Username and password required"}), 400
+
+    result = user_system.authenticate(username, password)
+
+    if result["success"]:
+        login_user(result["user"], remember=True)
+        session.permanent = True
+        return jsonify({"success": True, "message": "Login successful", "username": result["user"].username})
+    else:
+        return jsonify(result), 401
+
+
+@app.route('/api/user/logout', methods=['POST'])
+def user_logout():
+    """User logout endpoint"""
+    logout_user()
+    return jsonify({"success": True, "message": "Logged out"})
 
 
 @app.route('/api/bots', methods=['GET'])
