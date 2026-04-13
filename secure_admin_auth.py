@@ -42,7 +42,8 @@ class AdminAuthSystem:
         and the stored hash no longer matches it."""
         env_password = os.environ.get('ADMIN_PASSWORD')
         if not env_password:
-            return  # No env var set, nothing to sync
+            print("Note: ADMIN_PASSWORD env var not set — admin password unchanged")
+            return
 
         data = self._load_auth_data()
         admin = data["admins"].get("admin")
