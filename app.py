@@ -195,13 +195,39 @@ def leaderboard_page():
 
 @app.route('/api/leaderboard', methods=['GET'])
 def get_leaderboard():
-    """Get bot leaderboard from the match scheduler"""
+    """Get bot leaderboard from the match scheduler, enriched with creator info"""
     try:
         board = match_scheduler.get_leaderboard()
+
+        # Enrich with creator username from approved bots
+        approved = review_system.submissions.get("approved_bots", {})
+        for entry in board:
+            bot_info = approved.get(entry["name"], {})
+            entry["creator"] = bot_info.get("submitter_username", "unknown")
+
         return jsonify({'success': True, 'leaderboard': board})
     except Exception as e:
         logging.error(f"Error getting leaderboard: {e}")
         return jsonify({'success': False, 'error': 'Failed to load leaderboard'}), 500
+
+
+@app.route('/api/bot-stats/<bot_name>', methods=['GET'])
+def get_bot_detail(bot_name):
+    """Get detailed stats for a single bot (used by profile modal)"""
+    try:
+        stats = match_scheduler.get_bot_stats(bot_name)
+        if not stats:
+            return jsonify({'success': False, 'error': 'Bot not found'}), 404
+
+        # Add creator info
+        approved = review_system.submissions.get("approved_bots", {})
+        bot_info = approved.get(bot_name, {})
+        stats["creator"] = bot_info.get("submitter_username", "unknown")
+
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        logging.error(f"Error getting bot stats for {bot_name}: {e}")
+        return jsonify({'success': False, 'error': 'Failed to load stats'}), 500
 
 
 @app.route('/api/live-match', methods=['GET'])

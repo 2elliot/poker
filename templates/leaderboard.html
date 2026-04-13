@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Leaderboard - Poker Bot Tournament{% endblock %}
+{% block body_class %}page-leaderboard{% endblock %}
 {% block nav_leaderboard %}active{% endblock %}
 
 {% block content %}
@@ -10,8 +11,53 @@
         <p class="subtitle">Bot rankings based on automated match performance</p>
     </div>
 
+    <!-- Filters -->
+    <div class="lb-filters">
+        <div class="lb-filter-group">
+            <label for="filterMinHands">Min. Hands</label>
+            <select id="filterMinHands" onchange="applyFilters()">
+                <option value="0">All bots</option>
+                <option value="100">100+</option>
+                <option value="500">500+</option>
+                <option value="1000">1,000+</option>
+                <option value="5000" selected>5,000+ (calibrated)</option>
+            </select>
+        </div>
+        <div class="lb-filter-group">
+            <label for="filterSort">Sort by</label>
+            <select id="filterSort" onchange="applyFilters()">
+                <option value="elo" selected>Elo Rating</option>
+                <option value="mbb">mbb/hand</option>
+                <option value="win_rate">Win Rate</option>
+                <option value="hands_played">Hands Played</option>
+            </select>
+        </div>
+        <div class="lb-filter-group">
+            <button class="btn btn-secondary lb-toggle-chart" onclick="toggleScatterChart()">
+                <span id="chartToggleLabel">Show Style Chart</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- VPIP vs PFR Scatter Chart (hidden by default) -->
+    <div class="lb-scatter-container" id="scatterContainer" style="display: none;">
+        <h3>Play Style Map <span style="color: #666; font-weight: normal; font-size: 13px;">(VPIP vs PFR)</span></h3>
+        <canvas id="scatterChart" width="600" height="400"></canvas>
+    </div>
+
+    <!-- Leaderboard Table -->
     <div class="section">
         <div id="leaderboardContent">
+            <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Bot Profile Modal -->
+<div class="modal-overlay" id="botProfileModal" style="display: none;" onclick="closeBotProfile(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+        <button class="modal-close" onclick="closeBotProfile()">&times;</button>
+        <div id="botProfileContent">
             <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
         </div>
     </div>
@@ -20,6 +66,8 @@
 
 {% block scripts %}
 <script>
+    let allBots = [];
+
     document.addEventListener('DOMContentLoaded', loadLeaderboard);
 
     async function loadLeaderboard() {
@@ -38,54 +86,331 @@
                 return;
             }
 
-            const rows = data.leaderboard.map((bot, i) => {
-                const mbb = bot.mbb_per_hand !== null ? bot.mbb_per_hand : '--';
-                const mbbClass = bot.mbb_per_hand > 0 ? 'stats-cell-won' : bot.mbb_per_hand < 0 ? 'stats-cell-lost' : '';
-                const calibrated = bot.calibrated ? '' : '<span style="color: #f0ad4e; font-size: 11px;" title="Needs 5,000+ hands for calibration"> (calibrating)</span>';
-
-                // Style classification
-                let style = '';
-                if (bot.vpip > 0 && bot.pfr > 0) {
-                    if (bot.vpip > 40 && bot.pfr > 25) style = 'Loose-Aggressive';
-                    else if (bot.vpip > 40) style = 'Loose-Passive';
-                    else if (bot.pfr > 20) style = 'Tight-Aggressive';
-                    else style = 'Tight-Passive';
-                }
-
-                return `<tr>
-                    <td style="font-weight: 600; color: #888;">${i + 1}</td>
-                    <td class="stats-cell-name">${bot.name}${calibrated}</td>
-                    <td class="stats-cell-chips">${Math.round(bot.elo)}</td>
-                    <td class="${mbbClass}">${mbb}</td>
-                    <td>${bot.hands_played.toLocaleString()}</td>
-                    <td>${bot.win_rate}%</td>
-                    <td>${bot.tournaments_won} / ${bot.tournaments_played}</td>
-                    <td style="color: #888; font-size: 12px;">${style}</td>
-                </tr>`;
-            }).join('');
-
-            container.innerHTML = `
-                <table class="stats-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Bot</th>
-                            <th>Elo</th>
-                            <th>mbb/hand</th>
-                            <th>Hands</th>
-                            <th>Win Rate</th>
-                            <th>Tournaments (W/P)</th>
-                            <th>Style</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
+            allBots = data.leaderboard;
+            applyFilters();
 
         } catch (error) {
             console.error('Error loading leaderboard:', error);
             container.innerHTML = '<div class="alert alert-error show">Failed to load leaderboard</div>';
         }
+    }
+
+    function applyFilters() {
+        const minHands = parseInt(document.getElementById('filterMinHands').value) || 0;
+        const sortBy = document.getElementById('filterSort').value;
+
+        let filtered = allBots.filter(b => b.hands_played >= minHands);
+
+        filtered.sort((a, b) => {
+            if (sortBy === 'elo') return b.elo - a.elo;
+            if (sortBy === 'mbb') return (b.mbb_per_hand || -999) - (a.mbb_per_hand || -999);
+            if (sortBy === 'win_rate') return b.win_rate - a.win_rate;
+            if (sortBy === 'hands_played') return b.hands_played - a.hands_played;
+            return 0;
+        });
+
+        renderTable(filtered);
+
+        // Update scatter if visible
+        if (document.getElementById('scatterContainer').style.display !== 'none') {
+            drawScatterChart(filtered);
+        }
+    }
+
+    function renderTable(bots) {
+        const container = document.getElementById('leaderboardContent');
+
+        if (bots.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <h3>No bots match the filter</h3>
+                    <p>Try lowering the minimum hands requirement.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const rows = bots.map((bot, i) => {
+            const mbb = bot.mbb_per_hand !== null ? bot.mbb_per_hand : '--';
+            const mbbClass = bot.mbb_per_hand > 0 ? 'stats-cell-won' : bot.mbb_per_hand < 0 ? 'stats-cell-lost' : '';
+            const calibrated = bot.calibrated ? '' : '<span class="lb-calibrating" title="Needs 5,000+ hands">calibrating</span>';
+
+            const style = getStyleLabel(bot.vpip, bot.pfr);
+            const styleClass = getStyleClass(style);
+
+            return `<tr class="lb-row" onclick="openBotProfile('${bot.name}')">
+                <td class="lb-rank">${i + 1}</td>
+                <td>
+                    <div class="lb-bot-name">${bot.name}</div>
+                    <div class="lb-bot-creator">by ${bot.creator || 'unknown'} ${calibrated}</div>
+                </td>
+                <td class="lb-elo">${Math.round(bot.elo)}</td>
+                <td class="${mbbClass}">${mbb}</td>
+                <td>${bot.hands_played.toLocaleString()}</td>
+                <td>${bot.win_rate}%</td>
+                <td>${bot.tournaments_won}W / ${bot.tournaments_played}P</td>
+                <td><span class="lb-style-tag ${styleClass}">${style || '--'}</span></td>
+            </tr>`;
+        }).join('');
+
+        container.innerHTML = `
+            <table class="stats-table lb-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Bot</th>
+                        <th>Elo</th>
+                        <th>mbb/hand</th>
+                        <th>Hands</th>
+                        <th>Win Rate</th>
+                        <th>Tournaments</th>
+                        <th>Style</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+    }
+
+    // --- Style helpers ---
+
+    function getStyleLabel(vpip, pfr) {
+        if (!vpip && !pfr) return '';
+        if (vpip > 40 && pfr > 25) return 'LAG';
+        if (vpip > 40) return 'LP';
+        if (pfr > 20) return 'TAG';
+        return 'TP';
+    }
+
+    function getStyleFullName(label) {
+        const map = { 'LAG': 'Loose-Aggressive', 'LP': 'Loose-Passive', 'TAG': 'Tight-Aggressive', 'TP': 'Tight-Passive' };
+        return map[label] || label;
+    }
+
+    function getStyleClass(label) {
+        const map = { 'LAG': 'style-lag', 'LP': 'style-lp', 'TAG': 'style-tag', 'TP': 'style-tp' };
+        return map[label] || '';
+    }
+
+    // --- Bot profile modal ---
+
+    async function openBotProfile(botName) {
+        const modal = document.getElementById('botProfileModal');
+        const content = document.getElementById('botProfileContent');
+        modal.style.display = 'flex';
+        content.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>';
+
+        try {
+            const response = await fetch(`/api/bot-stats/${encodeURIComponent(botName)}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                content.innerHTML = `<div class="alert alert-error show">${data.error || 'Failed to load'}</div>`;
+                return;
+            }
+
+            const s = data.stats;
+            const style = getStyleLabel(s.vpip, s.pfr);
+            const mbb = s.mbb_per_hand !== null ? s.mbb_per_hand : '--';
+            const mbbClass = s.mbb_per_hand > 0 ? 'stats-cell-won' : s.mbb_per_hand < 0 ? 'stats-cell-lost' : '';
+            const netClass = s.net_chips >= 0 ? 'stats-cell-won' : 'stats-cell-lost';
+
+            content.innerHTML = `
+                <div class="bot-profile">
+                    <div class="bot-profile-header">
+                        <h2>${s.name}</h2>
+                        <span class="bot-profile-creator">by ${s.creator || 'unknown'}</span>
+                        ${style ? `<span class="lb-style-tag ${getStyleClass(style)}" style="margin-left: 10px;">${getStyleFullName(style)}</span>` : ''}
+                    </div>
+
+                    <div class="bot-profile-grid">
+                        <div class="bot-stat-card">
+                            <div class="bot-stat-value lb-elo">${Math.round(s.elo)}</div>
+                            <div class="bot-stat-label">Elo Rating</div>
+                        </div>
+                        <div class="bot-stat-card">
+                            <div class="bot-stat-value ${mbbClass}">${mbb}</div>
+                            <div class="bot-stat-label">mbb/hand</div>
+                        </div>
+                        <div class="bot-stat-card">
+                            <div class="bot-stat-value">${s.win_rate}%</div>
+                            <div class="bot-stat-label">Win Rate</div>
+                        </div>
+                        <div class="bot-stat-card">
+                            <div class="bot-stat-value">${s.hands_played.toLocaleString()}</div>
+                            <div class="bot-stat-label">Hands Played</div>
+                        </div>
+                    </div>
+
+                    <div class="bot-profile-details">
+                        <table class="bot-detail-table">
+                            <tr><td>Hands Won</td><td>${s.hands_won.toLocaleString()}</td></tr>
+                            <tr><td>Tournaments</td><td>${s.tournaments_won}W / ${s.tournaments_played}P</td></tr>
+                            <tr><td>Chips Won</td><td class="stats-cell-won">+${s.chips_won.toLocaleString()}</td></tr>
+                            <tr><td>Chips Lost</td><td class="stats-cell-lost">-${s.chips_lost.toLocaleString()}</td></tr>
+                            <tr><td>Net Chips</td><td class="${netClass}">${s.net_chips >= 0 ? '+' : ''}${s.net_chips.toLocaleString()}</td></tr>
+                            <tr><td>VPIP</td><td>${s.vpip}%</td></tr>
+                            <tr><td>PFR</td><td>${s.pfr}%</td></tr>
+                            <tr><td>Calibrated</td><td>${s.calibrated ? 'Yes' : 'No (< 5,000 hands)'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            content.innerHTML = '<div class="alert alert-error show">Failed to load bot stats</div>';
+        }
+    }
+
+    function closeBotProfile(event) {
+        if (event && event.target !== document.getElementById('botProfileModal')) return;
+        document.getElementById('botProfileModal').style.display = 'none';
+    }
+
+    // Close modal on escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeBotProfile();
+    });
+
+    // --- VPIP vs PFR Scatter Chart ---
+
+    function toggleScatterChart() {
+        const container = document.getElementById('scatterContainer');
+        const label = document.getElementById('chartToggleLabel');
+        if (container.style.display === 'none') {
+            container.style.display = '';
+            label.textContent = 'Hide Style Chart';
+            const minHands = parseInt(document.getElementById('filterMinHands').value) || 0;
+            drawScatterChart(allBots.filter(b => b.hands_played >= minHands));
+        } else {
+            container.style.display = 'none';
+            label.textContent = 'Show Style Chart';
+        }
+    }
+
+    function drawScatterChart(bots) {
+        const canvas = document.getElementById('scatterChart');
+        const ctx = canvas.getContext('2d');
+
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const pad = { top: 30, right: 30, bottom: 50, left: 60 };
+        const cw = w - pad.left - pad.right;
+        const ch = h - pad.top - pad.bottom;
+
+        // Axes: VPIP (x: 0-100), PFR (y: 0-100)
+        const maxVpip = 100, maxPfr = 100;
+
+        // Background quadrants
+        const midX = pad.left + cw * (40 / maxVpip);
+        const midY = pad.top + ch * (1 - 25 / maxPfr);
+
+        // Top-left: Tight-Aggressive
+        ctx.fillStyle = 'rgba(74, 144, 226, 0.06)';
+        ctx.fillRect(pad.left, pad.top, midX - pad.left, midY - pad.top);
+        // Top-right: Loose-Aggressive
+        ctx.fillStyle = 'rgba(226, 74, 74, 0.06)';
+        ctx.fillRect(midX, pad.top, pad.left + cw - midX, midY - pad.top);
+        // Bottom-left: Tight-Passive
+        ctx.fillStyle = 'rgba(100, 100, 100, 0.06)';
+        ctx.fillRect(pad.left, midY, midX - pad.left, pad.top + ch - midY);
+        // Bottom-right: Loose-Passive
+        ctx.fillStyle = 'rgba(240, 173, 78, 0.06)';
+        ctx.fillRect(midX, midY, pad.left + cw - midX, pad.top + ch - midY);
+
+        // Quadrant labels
+        ctx.font = '11px Arial';
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'center';
+        ctx.fillText('Tight-Aggressive', (pad.left + midX) / 2, pad.top + 16);
+        ctx.fillText('Loose-Aggressive', (midX + pad.left + cw) / 2, pad.top + 16);
+        ctx.fillText('Tight-Passive', (pad.left + midX) / 2, pad.top + ch - 6);
+        ctx.fillText('Loose-Passive', (midX + pad.left + cw) / 2, pad.top + ch - 6);
+
+        // Grid lines
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 0.5;
+        for (let v = 0; v <= maxVpip; v += 20) {
+            const x = pad.left + (v / maxVpip) * cw;
+            ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + ch); ctx.stroke();
+        }
+        for (let p = 0; p <= maxPfr; p += 20) {
+            const y = pad.top + ch - (p / maxPfr) * ch;
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        }
+
+        // Threshold lines
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        // VPIP = 40 vertical
+        ctx.beginPath(); ctx.moveTo(midX, pad.top); ctx.lineTo(midX, pad.top + ch); ctx.stroke();
+        // PFR = 25 horizontal
+        ctx.beginPath(); ctx.moveTo(pad.left, midY); ctx.lineTo(pad.left + cw, midY); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Axes
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, pad.top + ch);
+        ctx.lineTo(pad.left + cw, pad.top + ch);
+        ctx.stroke();
+
+        // Axis labels
+        ctx.fillStyle = '#888';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('VPIP %', pad.left + cw / 2, h - 8);
+        for (let v = 0; v <= maxVpip; v += 20) {
+            const x = pad.left + (v / maxVpip) * cw;
+            ctx.fillText(v, x, pad.top + ch + 18);
+        }
+
+        ctx.save();
+        ctx.translate(14, pad.top + ch / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('PFR %', 0, 0);
+        ctx.restore();
+
+        ctx.textAlign = 'right';
+        for (let p = 0; p <= maxPfr; p += 20) {
+            const y = pad.top + ch - (p / maxPfr) * ch;
+            ctx.fillText(p, pad.left - 8, y + 4);
+        }
+
+        // Plot bots
+        const colors = ['#4a90e2', '#e24a4a', '#5ac', '#f90', '#9c3', '#c6c', '#fc3', '#6cf', '#f6c', '#c9f'];
+        const validBots = bots.filter(b => b.vpip > 0 || b.pfr > 0);
+
+        validBots.forEach((bot, i) => {
+            const x = pad.left + (bot.vpip / maxVpip) * cw;
+            const y = pad.top + ch - (bot.pfr / maxPfr) * ch;
+            const color = colors[i % colors.length];
+
+            // Dot
+            ctx.beginPath();
+            ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = '#e0e0e0';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(bot.name, x + 9, y + 4);
+        });
     }
 </script>
 {% endblock %}
