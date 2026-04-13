@@ -6,7 +6,7 @@ const API_BASE_URL = window.location.hostname === 'localhost'
 // Game State
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 10;
-const DEFAULT_DEFAULT_STARTING_CHIPS = 1000;
+const DEFAULT_STARTING_CHIPS = 1000;
 
 const state = {
     // Mode: 'spectator' or 'custom'
@@ -112,7 +112,7 @@ function setMode(mode) {
 
 function getCustomSettings() {
     return {
-        startingChips: parseInt(document.getElementById('settingChips').value) || DEFAULT_DEFAULT_STARTING_CHIPS,
+        startingChips: parseInt(document.getElementById('settingChips').value) || DEFAULT_STARTING_CHIPS,
         smallBlind: parseInt(document.getElementById('settingSmallBlind').value) || 10,
         bigBlind: parseInt(document.getElementById('settingBigBlind').value) || 20,
         blindInterval: parseInt(document.getElementById('settingBlindInterval').value) || 10,
