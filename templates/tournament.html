@@ -27,6 +27,36 @@
 
         <!-- Custom table sidebar content (hidden by default) -->
         <div id="customSidebar" style="display: none;">
+            <div class="sandbox-notice">
+                <span class="sandbox-icon">&#9881;</span> Sandbox — results don't affect official rankings
+            </div>
+
+            <!-- Table Settings -->
+            <div class="table-settings">
+                <div class="settings-header" onclick="toggleSettings()">
+                    <h3>Table Settings</h3>
+                    <span class="settings-toggle" id="settingsToggle">&#9660;</span>
+                </div>
+                <div class="settings-body" id="settingsBody">
+                    <div class="setting-row">
+                        <label for="settingChips">Starting Chips</label>
+                        <input type="number" id="settingChips" value="1000" min="100" max="100000" step="100">
+                    </div>
+                    <div class="setting-row">
+                        <label for="settingSmallBlind">Small Blind</label>
+                        <input type="number" id="settingSmallBlind" value="10" min="1" max="1000" step="5">
+                    </div>
+                    <div class="setting-row">
+                        <label for="settingBigBlind">Big Blind</label>
+                        <input type="number" id="settingBigBlind" value="20" min="2" max="2000" step="10">
+                    </div>
+                    <div class="setting-row">
+                        <label for="settingBlindInterval">Blind Increase (hands)</label>
+                        <input type="number" id="settingBlindInterval" value="10" min="1" max="100" step="1">
+                    </div>
+                </div>
+            </div>
+
             <div class="sidebar-header">
                 <h2>Available Bots</h2>
                 <p>Click to add to table</p>

@@ -6,7 +6,7 @@ const API_BASE_URL = window.location.hostname === 'localhost'
 // Game State
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 10;
-const STARTING_CHIPS = 1000;
+const DEFAULT_DEFAULT_STARTING_CHIPS = 1000;
 
 const state = {
     // Mode: 'spectator' or 'custom'
@@ -107,6 +107,31 @@ function setMode(mode) {
 }
 
 // ============================================================================
+// CUSTOM TABLE SETTINGS
+// ============================================================================
+
+function getCustomSettings() {
+    return {
+        startingChips: parseInt(document.getElementById('settingChips').value) || DEFAULT_DEFAULT_STARTING_CHIPS,
+        smallBlind: parseInt(document.getElementById('settingSmallBlind').value) || 10,
+        bigBlind: parseInt(document.getElementById('settingBigBlind').value) || 20,
+        blindInterval: parseInt(document.getElementById('settingBlindInterval').value) || 10,
+    };
+}
+
+function toggleSettings() {
+    const body = document.getElementById('settingsBody');
+    const toggle = document.getElementById('settingsToggle');
+    if (body.style.display === 'none') {
+        body.style.display = '';
+        toggle.innerHTML = '&#9660;';
+    } else {
+        body.style.display = 'none';
+        toggle.innerHTML = '&#9654;';
+    }
+}
+
+// ============================================================================
 // SPECTATOR MODE
 // ============================================================================
 
@@ -186,7 +211,7 @@ function handleSpectatorEvent(data) {
         state.spectatorPlayers = data.players || [];
 
         data.players.forEach((name, i) => {
-            const chips = data.chips[name] || STARTING_CHIPS;
+            const chips = data.chips[name] || DEFAULT_STARTING_CHIPS;
             state.tablePlayers.push({
                 id: name,
                 botId: name,
@@ -504,12 +529,13 @@ function addBotToTable(botId) {
     const existingCount = state.tablePlayers.filter(p => p.botId === botId).length;
     const playerId = existingCount > 0 ? `${botId}_${existingCount + 1}` : botId;
     const displayName = existingCount > 0 ? `${bot.name} #${existingCount + 1}` : bot.name;
+    const chips = getCustomSettings().startingChips;
 
     const player = {
         id: playerId,
         botId: botId,
         name: displayName,
-        chips: STARTING_CHIPS,
+        chips: chips,
         bet: 0,
         cards: [],
         folded: false,
@@ -526,7 +552,7 @@ function addBotToTable(botId) {
             totalChipsWon: 0,
             totalChipsLost: 0
         };
-        state.chipHistory[playerId] = [{ game: 0, chips: STARTING_CHIPS }];
+        state.chipHistory[playerId] = [{ game: 0, chips: chips }];
     }
 
     logToConsole(`${displayName} joined the table`, 'event-action');
@@ -686,6 +712,7 @@ async function initializeTournament() {
     }
 
     try {
+        const settings = getCustomSettings();
         const response = await fetch(`${API_BASE_URL}/tournament/init`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -695,10 +722,10 @@ async function initializeTournament() {
                     name: p.name,
                     frontendId: p.id
                 })),
-                starting_chips: STARTING_CHIPS,
-                small_blind: 10,
-                big_blind: 20,
-                blind_increase_interval: 10
+                starting_chips: settings.startingChips,
+                small_blind: settings.smallBlind,
+                big_blind: settings.bigBlind,
+                blind_increase_interval: settings.blindInterval
             })
         });
 
@@ -986,8 +1013,9 @@ async function resetGame() {
     state.communityCards = [];
     state.pot = 0;
 
+    const resetChips = getCustomSettings().startingChips;
     state.tablePlayers.forEach(player => {
-        player.chips = STARTING_CHIPS;
+        player.chips = resetChips;
         player.bet = 0;
         player.folded = false;
         player.cards = [];
@@ -998,7 +1026,7 @@ async function resetGame() {
             gamesPlayed: 0, wins: 0, winRate: 0,
             totalChipsWon: 0, totalChipsLost: 0
         };
-        state.chipHistory[playerId] = [{ game: 0, chips: STARTING_CHIPS }];
+        state.chipHistory[playerId] = [{ game: 0, chips: resetChips }];
     }
 
     logToConsole('Game reset', 'event-action');
@@ -1105,7 +1133,7 @@ function drawChipsChart() {
     const chartWidth = displayWidth - padding * 2;
     const chartHeight = displayHeight - padding * 2;
 
-    let maxChips = STARTING_CHIPS;
+    let maxChips = DEFAULT_STARTING_CHIPS;
     let maxGames = state.gamesPlayed;
 
     state.tablePlayers.forEach(player => {
