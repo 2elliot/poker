@@ -569,6 +569,20 @@ class MatchScheduler:
             "match": self.live_match,
         }
 
+    def reset_stats(self):
+        """Reset all leaderboard stats. Bots keep their entries but all numbers go to defaults."""
+        with self._lock:
+            self.stats = {"bots": {}, "matches": [], "match_count": 0}
+            self._save_stats()
+        self.logger.info("All leaderboard stats have been reset")
+
+    def delete_bot_stats(self, bot_name: str):
+        """Remove a single bot from the stats."""
+        with self._lock:
+            self.stats["bots"].pop(bot_name, None)
+            self._save_stats()
+        self.logger.info(f"Stats deleted for bot: {bot_name}")
+
     def get_bot_stats(self, bot_name: str) -> Optional[Dict]:
         """Get detailed stats for a single bot."""
         data = self.stats["bots"].get(bot_name)

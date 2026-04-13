@@ -18,6 +18,9 @@
                 <span class="stat-value" id="approvedToday">0</span>
             </div>
         </div>
+        <div style="margin-top: 15px;">
+            <button class="btn btn-danger" onclick="resetLeaderboard()" style="font-size: 13px; padding: 8px 16px;">Reset Leaderboard</button>
+        </div>
     </div>
 
     <div id="submissionsList" class="submissions-list">
@@ -108,7 +111,10 @@
                             ${sub.revision_count > 0 ? `<span>Rev. ${sub.revision_count}</span>` : ''}
                         </div>
                     </div>
-                    <span class="status-badge status-${statusClass}">${statusText}</span>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span class="status-badge status-${statusClass}">${statusText}</span>
+                        <button class="btn btn-danger" onclick="deleteBot('${escapeHtml(sub.bot_name)}')" style="font-size: 11px; padding: 4px 10px;">Delete</button>
+                    </div>
                 </div>
 
                 ${sub.status === 'approved' && sub.bot_stats ? `
@@ -258,6 +264,50 @@
         } catch (error) {
             console.error('Action error:', error);
             showToast('Failed to perform action', 'error');
+        }
+    }
+
+    async function deleteBot(botName) {
+        if (!confirm(`Are you sure you want to permanently delete "${botName}"? This removes the bot, all submissions, and its stats.`)) {
+            return;
+        }
+        try {
+            const response = await fetch(`/api/admin/delete-bot/${encodeURIComponent(botName)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            if (result.success) {
+                showToast(result.message || 'Bot deleted', 'success');
+                loadSubmissions();
+            } else {
+                showToast(`Error: ${result.error || 'Delete failed'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            showToast('Failed to delete bot', 'error');
+        }
+    }
+
+    async function resetLeaderboard() {
+        if (!confirm('Are you sure you want to reset ALL leaderboard rankings? This clears every bot\'s Elo, win rates, and match history. This cannot be undone.')) {
+            return;
+        }
+        try {
+            const response = await fetch('/api/admin/reset-leaderboard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            if (result.success) {
+                showToast(result.message || 'Leaderboard reset', 'success');
+                loadSubmissions();
+            } else {
+                showToast(`Error: ${result.error || 'Reset failed'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Reset error:', error);
+            showToast('Failed to reset leaderboard', 'error');
         }
     }
 

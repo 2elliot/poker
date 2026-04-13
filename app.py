@@ -625,7 +625,7 @@ def get_audit_log():
     """ADMIN - Get security audit log"""
     if not current_user.is_admin:
         return jsonify({"error": "Unauthorized"}), 403
-    
+
     try:
         limit = request.args.get('limit', 100, type=int)
         log = auth_system.get_audit_log(limit)
@@ -633,6 +633,80 @@ def get_audit_log():
     except Exception as e:
         logging.error(f"Error getting audit log: {str(e)}")
         return jsonify({"success": False, "error": "Failed to load log"}), 500
+
+
+@app.route('/api/admin/delete-bot/<bot_name>', methods=['POST'])
+@login_required
+def admin_delete_bot(bot_name):
+    """ADMIN - Delete a bot from storage, submissions, and stats"""
+    if not current_user.is_admin:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    try:
+        # Delete from encrypted storage
+        result = bot_storage.delete_bot(bot_name, MASTER_PASSWORD)
+        if not result["success"]:
+            logging.warning(f"Bot storage delete note for '{bot_name}': {result.get('error')}")
+
+        # Remove from submissions and approved_bots
+        with review_system._lock:
+            review_system.submissions = review_system._load_submissions()
+            # Remove from approved_bots
+            review_system.submissions["approved_bots"].pop(bot_name, None)
+            # Remove any submission entries for this bot
+            to_remove = [
+                sid for sid, sub in review_system.submissions["submissions"].items()
+                if sub["bot_name"] == bot_name
+            ]
+            for sid in to_remove:
+                # Clean up code file
+                code_file = review_system.submissions["submissions"][sid].get("code_file")
+                if code_file and os.path.exists(code_file):
+                    os.remove(code_file)
+                del review_system.submissions["submissions"][sid]
+            review_system._save_submissions()
+
+        # Remove from match stats
+        match_scheduler.delete_bot_stats(bot_name)
+
+        auth_system._log_audit_event(
+            "BOT_DELETED",
+            current_user.username,
+            request.remote_addr or "unknown",
+            f"Deleted bot '{bot_name}'"
+        )
+        logging.info(f"Bot '{bot_name}' deleted by {current_user.username}")
+
+        return jsonify({"success": True, "message": f"Bot '{bot_name}' deleted successfully"})
+
+    except Exception as e:
+        logging.error(f"Error deleting bot '{bot_name}': {str(e)}")
+        return jsonify({"success": False, "error": "Failed to delete bot"}), 500
+
+
+@app.route('/api/admin/reset-leaderboard', methods=['POST'])
+@login_required
+def admin_reset_leaderboard():
+    """ADMIN - Reset all leaderboard rankings and match statistics"""
+    if not current_user.is_admin:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    try:
+        match_scheduler.reset_stats()
+
+        auth_system._log_audit_event(
+            "LEADERBOARD_RESET",
+            current_user.username,
+            request.remote_addr or "unknown",
+            "Reset all leaderboard rankings"
+        )
+        logging.info(f"Leaderboard reset by {current_user.username}")
+
+        return jsonify({"success": True, "message": "Leaderboard rankings have been reset"})
+
+    except Exception as e:
+        logging.error(f"Error resetting leaderboard: {str(e)}")
+        return jsonify({"success": False, "error": "Failed to reset leaderboard"}), 500
 
 
 # ============================================================================
