@@ -7,14 +7,85 @@
 <div class="page-content">
     <div class="page-header">
         <h1>Leaderboard</h1>
-        <p class="subtitle">Bot rankings based on tournament performance</p>
+        <p class="subtitle">Bot rankings based on automated match performance</p>
     </div>
 
     <div class="section">
-        <div class="empty-state">
-            <h3>Coming Soon</h3>
-            <p>The leaderboard will show bot rankings once the automated match system is running.</p>
+        <div id="leaderboardContent">
+            <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', loadLeaderboard);
+
+    async function loadLeaderboard() {
+        const container = document.getElementById('leaderboardContent');
+        try {
+            const response = await fetch('/api/leaderboard');
+            const data = await response.json();
+
+            if (!data.success || !data.leaderboard || data.leaderboard.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No rankings yet</h3>
+                        <p>Rankings will appear once bots have played enough automated matches.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const rows = data.leaderboard.map((bot, i) => {
+                const mbb = bot.mbb_per_hand !== null ? bot.mbb_per_hand : '--';
+                const mbbClass = bot.mbb_per_hand > 0 ? 'stats-cell-won' : bot.mbb_per_hand < 0 ? 'stats-cell-lost' : '';
+                const calibrated = bot.calibrated ? '' : '<span style="color: #f0ad4e; font-size: 11px;" title="Needs 5,000+ hands for calibration"> (calibrating)</span>';
+
+                // Style classification
+                let style = '';
+                if (bot.vpip > 0 && bot.pfr > 0) {
+                    if (bot.vpip > 40 && bot.pfr > 25) style = 'Loose-Aggressive';
+                    else if (bot.vpip > 40) style = 'Loose-Passive';
+                    else if (bot.pfr > 20) style = 'Tight-Aggressive';
+                    else style = 'Tight-Passive';
+                }
+
+                return `<tr>
+                    <td style="font-weight: 600; color: #888;">${i + 1}</td>
+                    <td class="stats-cell-name">${bot.name}${calibrated}</td>
+                    <td class="stats-cell-chips">${Math.round(bot.elo)}</td>
+                    <td class="${mbbClass}">${mbb}</td>
+                    <td>${bot.hands_played.toLocaleString()}</td>
+                    <td>${bot.win_rate}%</td>
+                    <td>${bot.tournaments_won} / ${bot.tournaments_played}</td>
+                    <td style="color: #888; font-size: 12px;">${style}</td>
+                </tr>`;
+            }).join('');
+
+            container.innerHTML = `
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Bot</th>
+                            <th>Elo</th>
+                            <th>mbb/hand</th>
+                            <th>Hands</th>
+                            <th>Win Rate</th>
+                            <th>Tournaments (W/P)</th>
+                            <th>Style</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+
+        } catch (error) {
+            console.error('Error loading leaderboard:', error);
+            container.innerHTML = '<div class="alert alert-error show">Failed to load leaderboard</div>';
+        }
+    }
+</script>
 {% endblock %}

@@ -32,6 +32,7 @@ from secure_admin_auth import AdminAuthSystem
 from user_auth import UserAuthSystem, User
 from bot_approval_system import BotReviewSystem
 from secure_bot_storage import SecureBotStorage
+from match_scheduler import MatchScheduler
 
 # ============================================================================
 # APP CONFIGURATION
@@ -82,6 +83,9 @@ if not MASTER_PASSWORD:
     print("  Linux/Mac:            export MASTER_PASSWORD='your-secure-password'")
     print("=" * 80)
     sys.exit(1)
+
+# Background match scheduler
+match_scheduler = MatchScheduler(bot_storage, MASTER_PASSWORD)
 
 # Tournament state (temporary, cleared on restart - this is OK)
 tournament_state = {
@@ -185,8 +189,29 @@ def submit_page():
 
 @app.route('/leaderboard')
 def leaderboard_page():
-    """Leaderboard page (placeholder for now)"""
+    """Leaderboard page"""
     return render_template('leaderboard.html')
+
+
+@app.route('/api/leaderboard', methods=['GET'])
+def get_leaderboard():
+    """Get bot leaderboard from the match scheduler"""
+    try:
+        board = match_scheduler.get_leaderboard()
+        return jsonify({'success': True, 'leaderboard': board})
+    except Exception as e:
+        logging.error(f"Error getting leaderboard: {e}")
+        return jsonify({'success': False, 'error': 'Failed to load leaderboard'}), 500
+
+
+@app.route('/api/live-match', methods=['GET'])
+def get_live_match():
+    """Get live match events for spectator mode.
+    Query param: since=<seq_number> to get events after a given sequence.
+    """
+    since = request.args.get('since', 0, type=int)
+    data = match_scheduler.get_events_since(since_seq=since)
+    return jsonify({'success': True, **data})
 
 
 @app.route('/login')
@@ -251,20 +276,22 @@ def user_logout():
 def get_available_bots():
     """Get list of APPROVED bots available for tournaments"""
     try:
-        # Only return approved bots from secure storage
         approved_bots = bot_storage.list_bots()
-        
+
         bots_info = []
         for bot in approved_bots:
+            # Merge scheduler stats if available
+            sched_stats = match_scheduler.get_bot_stats(bot['name'])
             bots_info.append({
                 'id': bot['name'],
                 'name': bot['name'],
                 'type': 'Approved Bot',
-                'wins': bot.get('wins', 0),
-                'total_games': bot.get('total_games', 0),
-                'win_rate': round(bot.get('win_rate', 0), 1)
+                'elo': sched_stats['elo'] if sched_stats else 1200,
+                'hands_played': sched_stats['hands_played'] if sched_stats else 0,
+                'win_rate': sched_stats['win_rate'] if sched_stats else 0,
+                'calibrated': sched_stats['calibrated'] if sched_stats else False,
             })
-        
+
         return jsonify({
             'success': True,
             'bots': bots_info
@@ -1180,13 +1207,16 @@ if __name__ == '__main__':
     print()
     print("=" * 80)
     
+    # Start background match scheduler
+    match_scheduler.start()
+
     # Production mode check
     if os.environ.get('FLASK_ENV') == 'production':
-        print("🏭 PRODUCTION MODE")
+        print("PRODUCTION MODE")
         print("   Using Waitress for production serving...")
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000, threads=4)
     else:
-        print("🔧 DEVELOPMENT MODE")
+        print("DEVELOPMENT MODE")
         print("   For production, set: FLASK_ENV=production")
         app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

@@ -9,6 +9,10 @@ const MAX_PLAYERS = 10;
 const STARTING_CHIPS = 1000;
 
 const state = {
+    // Mode: 'spectator' or 'custom'
+    mode: 'spectator',
+
+    // Custom table state
     availableBots: [],
     tablePlayers: [],
     isPlaying: false,
@@ -23,15 +27,397 @@ const state = {
     pot: 0,
     stepping: false,
     handInProgress: false,
+
+    // Spectator state
+    spectatorSpeed: 1,
+    spectatorLastSeq: 0,
+    spectatorPollTimer: null,
+    spectatorReplayTimer: null,
+    spectatorEventQueue: [],      // events fetched but not yet rendered
+    spectatorPlayers: [],         // player list for current match
+    spectatorMatch: null,         // current match summary
 };
 
-// Initialize
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
 async function init() {
-    await loadAvailableBots();
+    // Start in spectator mode
+    setMode('spectator');
     setupLogStreaming();
     updateStatus();
     logToConsole('Poker tournament system initialized', 'event-phase');
 }
+
+// ============================================================================
+// MODE SWITCHING
+// ============================================================================
+
+function setMode(mode) {
+    state.mode = mode;
+
+    // Update toggle buttons
+    document.getElementById('spectatorModeBtn').classList.toggle('active', mode === 'spectator');
+    document.getElementById('customModeBtn').classList.toggle('active', mode === 'custom');
+
+    // Toggle sidebar content
+    document.getElementById('spectatorSidebar').style.display = mode === 'spectator' ? '' : 'none';
+    document.getElementById('customSidebar').style.display = mode === 'custom' ? '' : 'none';
+
+    // Toggle controls
+    document.getElementById('spectatorControls').style.display = mode === 'spectator' ? '' : 'none';
+    document.getElementById('customControls').style.display = mode === 'custom' ? '' : 'none';
+
+    if (mode === 'spectator') {
+        // Stop custom game if running
+        stopGameLoop();
+        state.isPlaying = false;
+
+        // Reset spectator table state
+        state.tablePlayers = [];
+        state.communityCards = [];
+        state.pot = 0;
+        state.gamesPlayed = 0;
+
+        // Update empty message
+        const emptyMsg = document.getElementById('emptyMessage');
+        emptyMsg.querySelector('h3').textContent = 'Waiting for Live Match';
+        emptyMsg.querySelector('p').textContent = 'A match will begin automatically when bots are available';
+
+        // Start spectator polling
+        startSpectatorPolling();
+        renderTable();
+        document.getElementById('gameStatus').textContent = 'Spectator Mode';
+    } else {
+        // Stop spectator
+        stopSpectatorPolling();
+
+        // Update empty message
+        const emptyMsg = document.getElementById('emptyMessage');
+        emptyMsg.querySelector('h3').textContent = 'No Players at Table';
+        emptyMsg.querySelector('p').textContent = 'Select bots from the left panel to add them to the table';
+
+        // Load bots for custom mode
+        loadAvailableBots();
+        renderTable();
+        document.getElementById('gameStatus').textContent = 'Ready';
+    }
+    updateStatus();
+}
+
+// ============================================================================
+// SPECTATOR MODE
+// ============================================================================
+
+function startSpectatorPolling() {
+    stopSpectatorPolling();
+    state.spectatorLastSeq = 0;
+    state.spectatorEventQueue = [];
+    pollLiveMatch();
+    // Poll every 1 second for new events
+    state.spectatorPollTimer = setInterval(pollLiveMatch, 1000);
+    // Start replay timer
+    startSpectatorReplay();
+}
+
+function stopSpectatorPolling() {
+    if (state.spectatorPollTimer) {
+        clearInterval(state.spectatorPollTimer);
+        state.spectatorPollTimer = null;
+    }
+    if (state.spectatorReplayTimer) {
+        clearInterval(state.spectatorReplayTimer);
+        state.spectatorReplayTimer = null;
+    }
+}
+
+async function pollLiveMatch() {
+    if (state.mode !== 'spectator') return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/live-match?since=${state.spectatorLastSeq}`);
+        const data = await response.json();
+
+        if (!data.success) return;
+
+        // Update match info
+        state.spectatorMatch = data.match;
+
+        // Queue new events for replay
+        if (data.events && data.events.length > 0) {
+            state.spectatorEventQueue.push(...data.events);
+            state.spectatorLastSeq = data.last_seq;
+        }
+
+        // Update sidebar
+        renderSpectatorSidebar();
+
+    } catch (error) {
+        // Silently retry on next poll
+    }
+}
+
+function startSpectatorReplay() {
+    if (state.spectatorReplayTimer) clearInterval(state.spectatorReplayTimer);
+    const interval = Math.max(100, 800 / state.spectatorSpeed);
+    state.spectatorReplayTimer = setInterval(replayNextEvent, interval);
+}
+
+function replayNextEvent() {
+    if (state.mode !== 'spectator') return;
+    if (state.spectatorEventQueue.length === 0) return;
+
+    const event = state.spectatorEventQueue.shift();
+    handleSpectatorEvent(event);
+}
+
+function handleSpectatorEvent(data) {
+    const event = data.event;
+
+    if (event === 'match_start') {
+        // New match starting — set up players on the table
+        state.tablePlayers = [];
+        state.communityCards = [];
+        state.pot = 0;
+        state.gamesPlayed = 0;
+        state.statistics = {};
+        state.chipHistory = {};
+        state.spectatorPlayers = data.players || [];
+
+        data.players.forEach((name, i) => {
+            const chips = data.chips[name] || STARTING_CHIPS;
+            state.tablePlayers.push({
+                id: name,
+                botId: name,
+                name: name,
+                chips: chips,
+                bet: 0,
+                cards: [],
+                folded: false,
+                allIn: false,
+            });
+            state.statistics[name] = {
+                gamesPlayed: 0, wins: 0, winRate: 0,
+                totalChipsWon: 0, totalChipsLost: 0
+            };
+            state.chipHistory[name] = [{ game: 0, chips: chips }];
+        });
+
+        logToConsole('=== NEW MATCH STARTED ===', 'event-phase');
+        logToConsole(`Players: ${data.players.join(', ')}`, 'event-action');
+        renderTable();
+        updateStatus();
+
+    } else if (event === 'deal') {
+        state.handInProgress = true;
+        state.communityCards = [];
+        state.tablePlayers.forEach(p => { p.folded = false; p.cards = []; p.bet = 0; });
+
+        // Set hole cards
+        if (data.hole_cards) {
+            for (const [pid, cards] of Object.entries(data.hole_cards)) {
+                const player = findPlayer(pid);
+                if (player) {
+                    player.cards = cards.map(parseCardString);
+                }
+            }
+        }
+
+        // Sync chips and bets
+        if (data.chips) {
+            for (const [pid, chips] of Object.entries(data.chips)) {
+                const player = findPlayer(pid);
+                if (player) player.chips = chips;
+            }
+        }
+        if (data.bets) {
+            for (const [pid, bet] of Object.entries(data.bets)) {
+                const player = findPlayer(pid);
+                if (player) player.bet = bet;
+            }
+        }
+        state.pot = data.pot || 0;
+
+        const handNum = data.hand_number || '';
+        logToConsole(`--- HAND #${handNum} ---`, 'event-phase');
+
+        // Log blinds
+        if (data.bets) {
+            const blindPosts = Object.entries(data.bets)
+                .filter(([, bet]) => bet > 0)
+                .sort((a, b) => a[1] - b[1]);
+            for (const [pid, bet] of blindPosts) {
+                logToConsole(`${pid} posts blind: ${bet}`, 'event-action');
+            }
+        }
+
+        // Update hand info display
+        const handInfo = document.getElementById('spectatorHandInfo');
+        if (handInfo) handInfo.textContent = `Hand #${handNum}`;
+
+        renderTable();
+        updateStatus();
+
+    } else if (event === 'action') {
+        const actionStr = formatActionName(data.player, data.action, data.amount);
+        logToConsole(actionStr, 'event-action');
+
+        // Mark folded
+        if (data.action === 'fold') {
+            const player = findPlayer(data.player);
+            if (player) player.folded = true;
+        }
+
+        // Sync chips/bets
+        if (data.chips) {
+            for (const [pid, chips] of Object.entries(data.chips)) {
+                const player = findPlayer(pid);
+                if (player) player.chips = chips;
+            }
+        }
+        if (data.bets) {
+            for (const [pid, bet] of Object.entries(data.bets)) {
+                const player = findPlayer(pid);
+                if (player) player.bet = bet;
+            }
+        }
+        state.pot = data.pot || 0;
+
+        renderTable();
+
+    } else if (event === 'community') {
+        state.communityCards = (data.cards || []).map(parseCardString);
+        state.pot = data.pot || 0;
+        logToConsole(`--- ${(data.phase || '').toUpperCase()}: ${formatCommunityCards(state.communityCards)} ---`, 'event-phase');
+        renderTable();
+
+    } else if (event === 'showdown') {
+        state.communityCards = (data.community_cards || []).map(parseCardString);
+        state.pot = 0;
+
+        // Show hands
+        if (data.player_hands) {
+            for (const [pid, cards] of Object.entries(data.player_hands)) {
+                const player = findPlayer(pid);
+                if (player) player.cards = cards.map(parseCardString);
+            }
+        }
+
+        const winners = data.winners || [];
+        logToConsole(`WINNERS: ${winners.join(', ')}`, 'event-winner');
+
+        // Update chips
+        if (data.chips) {
+            for (const [pid, chips] of Object.entries(data.chips)) {
+                const player = findPlayer(pid);
+                if (player) {
+                    const prevChips = player.chips;
+                    player.chips = chips;
+
+                    const stats = state.statistics[player.id];
+                    if (stats) {
+                        const delta = chips - prevChips;
+                        if (delta > 0) {
+                            stats.wins++;
+                            stats.totalChipsWon += delta;
+                        } else if (delta < 0) {
+                            stats.totalChipsLost += Math.abs(delta);
+                        }
+                        stats.gamesPlayed++;
+                        stats.winRate = stats.gamesPlayed > 0
+                            ? (stats.wins / stats.gamesPlayed * 100).toFixed(1) : 0;
+                        state.chipHistory[player.id].push({
+                            game: state.gamesPlayed + 1,
+                            chips: chips
+                        });
+                    }
+                }
+            }
+        }
+
+        state.gamesPlayed++;
+        state.handInProgress = false;
+        state.tablePlayers.forEach(p => { p.bet = 0; });
+
+        renderTable();
+        renderStatistics();
+        updateStatus();
+
+    } else if (event === 'match_end') {
+        const winner = data.winner || 'unknown';
+        logToConsole(`=== MATCH COMPLETE - Winner: ${winner} ===`, 'event-winner');
+
+        if (data.results) {
+            data.results.forEach(r => {
+                logToConsole(`  ${r.position}. ${r.name} (${r.chips} chips)`, 'event-action');
+            });
+        }
+
+        state.handInProgress = false;
+        updateStatus();
+    }
+}
+
+function renderSpectatorSidebar() {
+    const match = state.spectatorMatch;
+    const statusEl = document.getElementById('matchStatus');
+    const listEl = document.getElementById('livePlayerList');
+
+    if (!match) {
+        statusEl.textContent = 'Waiting for match...';
+        listEl.innerHTML = '<div style="padding: 20px; color: #666; text-align: center;">No active match</div>';
+        return;
+    }
+
+    const status = match.status === 'playing'
+        ? `Hand ${match.hand_number || 0} / ${match.total_hands || '?'}`
+        : 'Match Complete';
+    statusEl.textContent = status;
+
+    const players = match.players || [];
+    const chips = match.chips || {};
+    const eliminated = match.eliminated || [];
+
+    listEl.innerHTML = players
+        .sort((a, b) => (chips[b] || 0) - (chips[a] || 0))
+        .map(name => {
+            const isOut = eliminated.includes(name);
+            const chipCount = chips[name] || 0;
+            return `
+                <div class="bot-item" style="cursor: default; ${isOut ? 'opacity: 0.4;' : ''}">
+                    <div class="bot-name">${name}</div>
+                    <div class="bot-type" style="color: ${isOut ? '#e24a4a' : '#5cb85c'};">
+                        ${isOut ? 'Eliminated' : chipCount.toLocaleString() + ' chips'}
+                    </div>
+                </div>
+            `;
+        }).join('');
+}
+
+function changeSpectatorSpeed(delta) {
+    const speeds = [0.25, 0.5, 1, 2, 4, 8];
+    let idx = speeds.indexOf(state.spectatorSpeed);
+    if (idx === -1) idx = 2; // default to 1x
+    idx = Math.max(0, Math.min(speeds.length - 1, idx + delta));
+    state.spectatorSpeed = speeds[idx];
+    document.getElementById('spectatorSpeedValue').textContent = state.spectatorSpeed + 'x';
+    startSpectatorReplay();
+}
+
+// Parse a card string like "A♠" into {value, suit} for renderCard
+function parseCardString(cardStr) {
+    if (typeof cardStr === 'object') return cardStr; // already parsed
+    if (!cardStr || cardStr.length < 2) return { value: '?', suit: '?' };
+    // Card format: "10♠" or "A♠" — suit is always the last character
+    const suit = cardStr.slice(-1);
+    const value = cardStr.slice(0, -1);
+    return { value, suit };
+}
+
+// ============================================================================
+// CUSTOM TABLE MODE (existing functionality)
+// ============================================================================
 
 // Load available bots from backend
 async function loadAvailableBots() {
@@ -72,7 +458,7 @@ function setupLogStreaming() {
     };
 
     state.eventSource.onerror = () => {
-        logToConsole('Log stream disconnected', 'event-error');
+        // Silently reconnect
     };
 }
 
@@ -104,6 +490,7 @@ function renderBotList() {
 
 // Add bot to table
 function addBotToTable(botId) {
+    if (state.mode !== 'custom') return;
     if (state.isPlaying) {
         alert('Cannot add bots while tournament is running');
         return;
@@ -172,6 +559,10 @@ function clearTable() {
     updateStatus();
 }
 
+// ============================================================================
+// SHARED UI FUNCTIONS
+// ============================================================================
+
 // Console functions
 function logToConsole(message, className = '') {
     const consoleContent = document.getElementById('consoleContent');
@@ -180,6 +571,10 @@ function logToConsole(message, className = '') {
     const timestamp = new Date().toLocaleTimeString();
     line.textContent = `[${timestamp}] ${message}`;
     consoleContent.appendChild(line);
+    // Keep console from growing unbounded
+    while (consoleContent.children.length > 500) {
+        consoleContent.removeChild(consoleContent.firstChild);
+    }
     consoleContent.scrollTop = consoleContent.scrollHeight;
 }
 
@@ -253,6 +648,36 @@ function renderCard(card) {
     return `<div class="card ${color}">${value}${suit}</div>`;
 }
 
+// Format action name for console
+function formatActionName(player, action, amount) {
+    const p = findPlayer(player);
+    const name = p ? p.name : player;
+    switch (action) {
+        case 'fold': return `${name} folds`;
+        case 'check': return `${name} checks`;
+        case 'call': return `${name} calls`;
+        case 'raise': return `${name} raises to ${amount}`;
+        case 'all_in': return `${name} goes ALL-IN`;
+        default: return `${name}: ${action}`;
+    }
+}
+
+function formatCommunityCards(cards) {
+    return cards.map(c => `${c.value}${c.suit}`).join(' ');
+}
+
+// Find player by ID
+function findPlayer(pid) {
+    const exact = state.tablePlayers.find(p => p.id === pid);
+    if (exact) return exact;
+    const fallback = pid.replace(/_(\d+)$/, '');
+    return state.tablePlayers.find(p => p.id === fallback);
+}
+
+// ============================================================================
+// CUSTOM TABLE: TOURNAMENT LOGIC
+// ============================================================================
+
 // Initialize tournament on backend
 async function initializeTournament() {
     if (state.tablePlayers.length < MIN_PLAYERS) {
@@ -295,6 +720,7 @@ async function initializeTournament() {
 
 // Step through one action of the tournament
 async function stepGame() {
+    if (state.mode !== 'custom') return;
     if (state.stepping) return;
     state.stepping = true;
 
@@ -340,17 +766,15 @@ async function stepGame() {
     }
 }
 
-// Handle a step event from the backend
+// Handle a step event from the backend (custom mode)
 function handleStepEvent(data) {
     const event = data.event;
 
     if (event === 'deal') {
         state.handInProgress = true;
-        // Clear previous hand state
         state.communityCards = [];
         state.tablePlayers.forEach(p => { p.folded = false; p.cards = []; p.bet = 0; });
 
-        // Set hole cards
         if (data.playerCards) {
             for (const [pid, cards] of Object.entries(data.playerCards)) {
                 const player = findPlayer(pid);
@@ -358,12 +782,10 @@ function handleStepEvent(data) {
             }
         }
 
-        // Update chips and bets
         syncChipsAndBets(data);
         state.pot = data.pot || 0;
         logToConsole(`--- NEW HAND (${data.phase}) ---`, 'event-phase');
 
-        // Log blind posts from the deal event data
         if (data.playerBets) {
             const blinds = Object.entries(data.playerBets)
                 .filter(([, bet]) => bet > 0)
@@ -379,7 +801,6 @@ function handleStepEvent(data) {
         const actionStr = formatAction(data.player, data.action, data.amount);
         logToConsole(actionStr, 'event-action');
 
-        // Mark folded players
         if (data.action === 'fold') {
             const player = findPlayer(data.player);
             if (player) player.folded = true;
@@ -398,7 +819,6 @@ function handleStepEvent(data) {
         state.communityCards = data.communityCards || [];
         state.pot = 0;
 
-        // Show all hands at showdown
         if (data.playerHands) {
             for (const [pid, cards] of Object.entries(data.playerHands)) {
                 const player = findPlayer(pid);
@@ -412,7 +832,6 @@ function handleStepEvent(data) {
         });
         logToConsole(`WINNERS: ${winners.join(', ')}`, 'event-winner');
 
-        // Update chips from showdown
         if (data.playerChips) {
             for (const [pid, chips] of Object.entries(data.playerChips)) {
                 const player = findPlayer(pid);
@@ -420,7 +839,6 @@ function handleStepEvent(data) {
                     const prevChips = player.chips;
                     player.chips = chips;
 
-                    // Update statistics
                     const stats = state.statistics[player.id];
                     if (stats) {
                         const delta = chips - prevChips;
@@ -445,14 +863,10 @@ function handleStepEvent(data) {
 
         state.gamesPlayed++;
         state.handInProgress = false;
-
-        // Clear bets
         state.tablePlayers.forEach(p => { p.bet = 0; });
-
         renderStatistics();
     }
 
-    // Always sync tournament-level state
     if (data.state) {
         syncTournamentState(data.state);
     }
@@ -461,16 +875,7 @@ function handleStepEvent(data) {
     updateStatus();
 }
 
-// Helpers
-function findPlayer(pid) {
-    // Try exact match first
-    const exact = state.tablePlayers.find(p => p.id === pid);
-    if (exact) return exact;
-    // Fallback: strip only a trailing _N suffix (not underscores within the name)
-    const fallback = pid.replace(/_(\d+)$/, '');
-    return state.tablePlayers.find(p => p.id === fallback);
-}
-
+// Custom mode helpers
 function syncChipsAndBets(data) {
     if (data.playerChips) {
         for (const [pid, chips] of Object.entries(data.playerChips)) {
@@ -487,7 +892,6 @@ function syncChipsAndBets(data) {
 }
 
 function syncTournamentState(ts) {
-    // Sync eliminations from tournament state
     if (ts.players) {
         for (const bp of ts.players) {
             const player = findPlayer(bp.id);
@@ -511,12 +915,10 @@ function formatAction(player, action, amount) {
     }
 }
 
-function formatCommunityCards(cards) {
-    return cards.map(c => `${c.value}${c.suit}`).join(' ');
-}
-
-// Toggle play/pause
+// Toggle play/pause (custom mode)
 async function togglePlay() {
+    if (state.mode !== 'custom') return;
+
     if (!state.tournamentInitialized && !state.isPlaying) {
         const initialized = await initializeTournament();
         if (!initialized) return;
@@ -549,7 +951,7 @@ function stopGameLoop() {
     }
 }
 
-// Change speed
+// Change speed (custom mode)
 function changeSpeed(delta) {
     const speeds = [0.25, 1, 4, 16, 64, 256];
     let currentIndex = speeds.indexOf(state.speed);
@@ -564,8 +966,9 @@ function changeSpeed(delta) {
     }
 }
 
-// Reset game
+// Reset game (custom mode)
 async function resetGame() {
+    if (state.mode !== 'custom') return;
     if (state.isPlaying && !confirm('Game in progress. Are you sure?')) return;
 
     state.isPlaying = false;
@@ -605,18 +1008,29 @@ async function resetGame() {
     renderStatistics();
 }
 
-// Update status
+// ============================================================================
+// STATUS & STATISTICS
+// ============================================================================
+
 function updateStatus() {
     document.getElementById('playerCount').textContent = state.tablePlayers.length;
     document.getElementById('gamesPlayed').textContent = state.gamesPlayed;
 
-    let status = 'Ready';
-    if (state.isPlaying) status = 'Playing';
-    else if (state.tablePlayers.length < MIN_PLAYERS) status = `Need ${MIN_PLAYERS - state.tablePlayers.length} more player(s)`;
-    document.getElementById('gameStatus').textContent = status;
+    if (state.mode === 'spectator') {
+        const match = state.spectatorMatch;
+        if (match && match.status === 'playing') {
+            document.getElementById('gameStatus').textContent = 'Live Match';
+        } else {
+            document.getElementById('gameStatus').textContent = 'Spectator Mode';
+        }
+    } else {
+        let status = 'Ready';
+        if (state.isPlaying) status = 'Playing';
+        else if (state.tablePlayers.length < MIN_PLAYERS) status = `Need ${MIN_PLAYERS - state.tablePlayers.length} more player(s)`;
+        document.getElementById('gameStatus').textContent = status;
+    }
 }
 
-// Render statistics
 function renderStatistics() {
     const statsGrid = document.getElementById('statsGrid');
 
@@ -626,9 +1040,9 @@ function renderStatistics() {
         return;
     }
 
-    // Build a table for all players
     const rows = state.tablePlayers.map(player => {
         const stats = state.statistics[player.id];
+        if (!stats) return '';
         const isEliminated = player.chips <= 0;
         return `
             <tr class="${isEliminated ? 'stats-row-eliminated' : ''}">
@@ -795,7 +1209,10 @@ function switchTab(tab) {
     }
 }
 
-// Sidebar resize
+// ============================================================================
+// RESIZE HANDLES
+// ============================================================================
+
 const sidebar = document.getElementById('sidebar');
 const sidebarResize = document.getElementById('sidebarResize');
 

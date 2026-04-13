@@ -9,11 +9,30 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="resize-handle vertical" id="sidebarResize"></div>
-        <div class="sidebar-header">
-            <h2>Available Bots</h2>
-            <p>Click to add to table</p>
+
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button class="mode-btn active" id="spectatorModeBtn" onclick="setMode('spectator')">Live Match</button>
+            <button class="mode-btn" id="customModeBtn" onclick="setMode('custom')">Custom Table</button>
         </div>
-        <div class="bot-list" id="botList"></div>
+
+        <!-- Spectator sidebar content -->
+        <div id="spectatorSidebar">
+            <div class="sidebar-header">
+                <h2>Live Match</h2>
+                <p id="matchStatus">Waiting for match...</p>
+            </div>
+            <div id="livePlayerList" class="bot-list"></div>
+        </div>
+
+        <!-- Custom table sidebar content (hidden by default) -->
+        <div id="customSidebar" style="display: none;">
+            <div class="sidebar-header">
+                <h2>Available Bots</h2>
+                <p>Click to add to table</p>
+            </div>
+            <div class="bot-list" id="botList"></div>
+        </div>
     </div>
 
     <!-- Main Content -->
@@ -26,8 +45,19 @@
 
         <!-- Game Tab -->
         <div class="tab-content active" id="gameTab">
-            <!-- Controls -->
-            <div class="controls">
+            <!-- Spectator Controls -->
+            <div class="controls" id="spectatorControls">
+                <div class="speed-control">
+                    <span class="speed-label">Replay Speed:</span>
+                    <button class="btn btn-secondary" onclick="changeSpectatorSpeed(-1)">-</button>
+                    <span class="speed-value" id="spectatorSpeedValue">1x</span>
+                    <button class="btn btn-secondary" onclick="changeSpectatorSpeed(1)">+</button>
+                </div>
+                <span id="spectatorHandInfo" style="color: #888; font-size: 13px;"></span>
+            </div>
+
+            <!-- Custom Table Controls (hidden by default) -->
+            <div class="controls" id="customControls" style="display: none;">
                 <button class="btn" id="playBtn" onclick="togglePlay()">Play</button>
                 <button class="btn btn-secondary" onclick="stepGame()">Step</button>
                 <button class="btn btn-danger" onclick="resetGame()">Reset</button>
@@ -45,8 +75,8 @@
             <div class="game-view">
                 <div class="table-container">
                     <div id="emptyMessage" class="empty-table">
-                        <h3>No Players at Table</h3>
-                        <p>Select bots from the left panel to add them to the table</p>
+                        <h3>Waiting for Live Match</h3>
+                        <p>A match will begin automatically when bots are available</p>
                     </div>
                     <div class="poker-table" id="pokerTable" style="display: none;">
                         <!-- Player seats (10 positions) -->
@@ -101,10 +131,10 @@
         <div class="status-bar">
             <div class="status-item">
                 <span>Players: <span id="playerCount">0</span></span>
-                <span>Games Played: <span id="gamesPlayed">0</span></span>
+                <span>Hands Played: <span id="gamesPlayed">0</span></span>
             </div>
             <div class="status-item">
-                <span id="gameStatus">Ready</span>
+                <span id="gameStatus">Spectator Mode</span>
             </div>
         </div>
     </div>
