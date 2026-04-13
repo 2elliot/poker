@@ -394,6 +394,15 @@ body.page-tournament {
     position: relative;
 }
 
+#spectatorSidebar,
+#customSidebar {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .mode-toggle {
     display: flex;
     padding: 10px;
