@@ -16,11 +16,11 @@
         <div class="lb-filter-group">
             <label for="filterMinHands">Min. Hands</label>
             <select id="filterMinHands" onchange="applyFilters()">
-                <option value="0">All bots</option>
+                <option value="0" selected>All bots</option>
                 <option value="100">100+</option>
                 <option value="500">500+</option>
                 <option value="1000">1,000+</option>
-                <option value="5000" selected>5,000+ (calibrated)</option>
+                <option value="5000">5,000+ (calibrated)</option>
             </select>
         </div>
         <div class="lb-filter-group">
@@ -34,13 +34,13 @@
         </div>
         <div class="lb-filter-group">
             <button class="btn btn-secondary lb-toggle-chart" onclick="toggleScatterChart()">
-                <span id="chartToggleLabel">Show Style Chart</span>
+                <span id="chartToggleLabel">Hide Style Chart</span>
             </button>
         </div>
     </div>
 
-    <!-- VPIP vs PFR Scatter Chart (hidden by default) -->
-    <div class="lb-scatter-container" id="scatterContainer" style="display: none;">
+    <!-- VPIP vs PFR Scatter Chart -->
+    <div class="lb-scatter-container" id="scatterContainer">
         <h3>Play Style Map <span style="color: #666; font-weight: normal; font-size: 13px;">(VPIP vs PFR)</span></h3>
         <canvas id="scatterChart" width="600" height="400"></canvas>
     </div>
