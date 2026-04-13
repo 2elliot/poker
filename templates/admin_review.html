@@ -102,7 +102,7 @@
                     <div>
                         <h3 style="color: #fff; margin-bottom: 8px;">${escapeHtml(sub.bot_name)}</h3>
                         <div class="submission-meta">
-                            <span>${escapeHtml(sub.submitter_email)}</span>
+                            <span>by ${escapeHtml(sub.submitter_username || 'unknown')}</span>
                             <span>${new Date(sub.submission_date).toLocaleString()}</span>
                             ${sub.code_lines ? `<span>${sub.code_lines} lines</span>` : ''}
                         </div>

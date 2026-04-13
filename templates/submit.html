@@ -10,16 +10,28 @@
         <p class="subtitle">Upload your bot, get it reviewed, and compete in tournaments!</p>
     </div>
 
+    {% if current_username %}
+    <!-- LOGGED IN VIEW -->
     <div class="tabs">
-        <button class="tab active" onclick="switchTab('submit')">Submit Bot</button>
-        <button class="tab" onclick="switchTab('status')">My Submissions</button>
+        <button class="tab active" onclick="switchTab('bots')">My Bots</button>
+        <button class="tab" onclick="switchTab('submit')">Submit New Bot</button>
         <button class="tab" onclick="switchTab('help')">Help & Template</button>
     </div>
 
-    <!-- SUBMIT TAB -->
-    <div id="submitTab" class="tab-content active" style="display: block; overflow: visible;">
+    <!-- MY BOTS TAB -->
+    <div id="botsTab" class="tab-content active" style="display: block; overflow: visible;">
         <div class="section">
-            <h2>Submit Your Poker Bot</h2>
+            <h2>My Bots</h2>
+            <div id="myBotsList">
+                <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUBMIT TAB -->
+    <div id="submitTab" class="tab-content" style="overflow: visible;">
+        <div class="section">
+            <h2>Submit a New Bot</h2>
 
             <div id="submitAlert" class="alert"></div>
 
@@ -32,33 +44,7 @@
                         placeholder="e.g., AggressivePlayer"
                         required
                     >
-                    <div class="helper-text">Choose a unique name for your bot</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="email">Your Email *</label>
-                    <input
-                        type="email"
-                        id="email"
-                        placeholder="your@email.com"
-                        required
-                    >
-                    <div class="helper-text">We'll notify you when your bot is reviewed</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="password">Bot Password *</label>
-                    <input
-                        type="password"
-                        id="password"
-                        placeholder="At least 12 characters"
-                        minlength="12"
-                        required
-                    >
-                    <div class="helper-text">
-                        You'll need this password to update your bot later.
-                        <strong>Save it somewhere safe!</strong>
-                    </div>
+                    <div class="helper-text">Choose a unique name for your bot (3-50 characters)</div>
                 </div>
 
                 <div class="form-group">
@@ -77,43 +63,6 @@
                     Submit for Review
                 </button>
             </form>
-        </div>
-
-        <div class="instructions">
-            <h3>What Happens Next?</h3>
-            <ol>
-                <li>Your bot code is submitted for review</li>
-                <li>Our admin will check it for security issues</li>
-                <li>You'll receive an email when it's approved or if changes are needed</li>
-                <li>Once approved, your bot will be available in tournaments!</li>
-                <li>You can then test it against other approved bots</li>
-            </ol>
-        </div>
-    </div>
-
-    <!-- STATUS TAB -->
-    <div id="statusTab" class="tab-content" style="overflow: visible;">
-        <div class="section">
-            <h2>My Submissions</h2>
-
-            <div id="statusAlert" class="alert"></div>
-
-            <div class="form-group">
-                <label for="checkEmail">Enter your email to check submission status:</label>
-                <div style="display: flex; gap: 10px;">
-                    <input
-                        type="email"
-                        id="checkEmail"
-                        placeholder="your@email.com"
-                        style="flex: 1;"
-                    >
-                    <button class="btn" onclick="checkSubmissions()">
-                        Check Status
-                    </button>
-                </div>
-            </div>
-
-            <div id="submissionsList"></div>
         </div>
     </div>
 
@@ -140,26 +89,13 @@ class MyBot(PokerBotAPI):
 
     def __init__(self, name: str):
         super().__init__(name)
-        # Add any initialization here
         self.hands_played = 0
 
     def get_action(self, game_state: GameState, hole_cards: List[Card],
                    legal_actions: List[PlayerAction], min_bet: int, max_bet: int):
         """
         Decide what action to take
-
-        Args:
-            game_state: Current game state (pot, community cards, etc.)
-            hole_cards: Your two hole cards
-            legal_actions: List of actions you can take
-            min_bet: Minimum bet amount for raises
-            max_bet: Maximum you can bet (your chips + current bet)
-
-        Returns:
-            tuple: (PlayerAction, amount)
         """
-
-        # Example: Simple strategy - always call if possible
         if PlayerAction.CALL in legal_actions:
             return PlayerAction.CALL, 0
 
@@ -169,14 +105,8 @@ class MyBot(PokerBotAPI):
         return PlayerAction.FOLD, 0
 
     def hand_complete(self, game_state: GameState, hand_result: Dict[str, Any]):
-        """
-        Called when a hand is complete
-        Use this to learn from results
-        """
-        self.hands_played += 1
-
-        if 'winners' in hand_result and self.name in hand_result['winners']:
-            self.logger.info(f"Won hand #{self.hands_played}!")</pre>
+        """Called when a hand is complete"""
+        self.hands_played += 1</pre>
             </div>
 
             <div class="instructions">
@@ -212,172 +142,247 @@ class MyBot(PokerBotAPI):
             </button>
         </div>
     </div>
+
+    <!-- UPDATE MODAL -->
+    <div id="updateModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center;">
+        <div style="background: #252525; border: 2px solid #333; border-radius: 8px; padding: 30px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <h2 style="color: #4a90e2; margin-bottom: 20px;">Update Bot: <span id="updateBotName"></span></h2>
+            <div id="updateAlert" class="alert"></div>
+            <div class="form-group">
+                <label for="updateCode">New Bot Code</label>
+                <textarea id="updateCode" placeholder="Paste your updated Python code here..." required></textarea>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn" onclick="submitUpdate()">Submit Update</button>
+                <button class="btn btn-secondary" onclick="closeUpdateModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- NOT LOGGED IN VIEW -->
+    <div class="section" style="text-align: center; padding: 60px 30px;">
+        <h2 style="margin-bottom: 15px;">Login to Submit Your Bot</h2>
+        <p style="color: #888; margin-bottom: 30px;">You need an account to submit and manage your poker bots.</p>
+        <a href="/login" class="btn" style="text-decoration: none; display: inline-block;">Login or Create Account</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
+{% if current_username %}
 <script>
-    function switchTab(tabName) {
-        document.querySelectorAll('.tab-content').forEach(tab => {
-            tab.style.display = 'none';
-        });
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
+    let currentSubmissions = [];
+    let updateSubmissionId = null;
 
-        if (tabName === 'submit') {
-            document.getElementById('submitTab').style.display = 'block';
-            document.querySelectorAll('.tab')[0].classList.add('active');
-        } else if (tabName === 'status') {
-            document.getElementById('statusTab').style.display = 'block';
-            document.querySelectorAll('.tab')[1].classList.add('active');
-        } else if (tabName === 'help') {
-            document.getElementById('helpTab').style.display = 'block';
-            document.querySelectorAll('.tab')[2].classList.add('active');
-        }
+    // Load submissions on page load
+    document.addEventListener('DOMContentLoaded', loadMyBots);
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+        const tabs = { bots: 0, submit: 1, help: 2 };
+        document.getElementById(tabName + 'Tab').style.display = 'block';
+        document.querySelectorAll('.tab')[tabs[tabName]].classList.add('active');
     }
 
     function showAlert(elementId, message, type) {
         const alert = document.getElementById(elementId);
         alert.className = `alert alert-${type} show`;
         alert.textContent = message;
+        if (type !== 'error') {
+            setTimeout(() => alert.classList.remove('show'), 5000);
+        }
+    }
 
-        setTimeout(() => {
-            alert.classList.remove('show');
-        }, 5000);
+    async function loadMyBots() {
+        const list = document.getElementById('myBotsList');
+        try {
+            const response = await fetch('/api/bots/my-submissions');
+            const data = await response.json();
+
+            if (!data.success) {
+                list.innerHTML = '<div class="alert alert-error show">Failed to load bots</div>';
+                return;
+            }
+
+            currentSubmissions = data.submissions;
+
+            if (currentSubmissions.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No bots yet</h3>
+                        <p>Submit your first bot using the "Submit New Bot" tab.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = currentSubmissions.map(sub => {
+                const statusClass = {
+                    'pending_review': 'pending',
+                    'approved': 'approved',
+                    'rejected': 'rejected',
+                    'revision_requested': 'revision'
+                }[sub.status] || 'pending';
+
+                const statusText = {
+                    'pending_review': 'Pending Review',
+                    'approved': 'Active',
+                    'rejected': 'Rejected',
+                    'revision_requested': 'Revision Requested'
+                }[sub.status] || sub.status;
+
+                let actionsHtml = '';
+                if (sub.status === 'approved') {
+                    actionsHtml = `<button class="btn btn-secondary" onclick="openUpdate('${sub.submission_id}', '${sub.bot_name}')">Update Code</button>`;
+                } else if (sub.status === 'revision_requested') {
+                    actionsHtml = `
+                        <button class="btn" onclick="openUpdate('${sub.submission_id}', '${sub.bot_name}')">Update Code</button>
+                        <button class="btn btn-danger" onclick="withdrawBot('${sub.submission_id}')">Withdraw</button>
+                    `;
+                } else if (sub.status === 'pending_review') {
+                    actionsHtml = `<button class="btn btn-danger" onclick="withdrawBot('${sub.submission_id}')">Withdraw</button>`;
+                } else if (sub.status === 'rejected') {
+                    actionsHtml = `<button class="btn btn-secondary" onclick="dismissBot('${sub.submission_id}')">Dismiss</button>`;
+                }
+
+                let notesHtml = '';
+                if (sub.review_notes && sub.review_notes.length > 0) {
+                    const latest = sub.review_notes[sub.review_notes.length - 1];
+                    if (latest.action !== 'resubmitted') {
+                        notesHtml = `
+                            <div class="review-notes">
+                                <strong>Latest Review:</strong>
+                                <div class="review-note">
+                                    <div class="review-note-date">${new Date(latest.date).toLocaleString()}</div>
+                                    <div>${latest.notes}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+
+                return `
+                    <div class="submission-card" id="card-${sub.submission_id}">
+                        <div class="submission-header">
+                            <div class="submission-name">${sub.bot_name}</div>
+                            <span class="status-badge status-${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="submission-meta">
+                            Submitted: ${new Date(sub.submission_date).toLocaleString()}
+                        </div>
+                        ${notesHtml}
+                        <div class="actions" style="margin-top: 15px;">
+                            ${actionsHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (error) {
+            console.error('Error loading bots:', error);
+            list.innerHTML = '<div class="alert alert-error show">Error loading bots</div>';
+        }
     }
 
     async function submitBot(event) {
         event.preventDefault();
-
-        const submitBtn = document.getElementById('submitBtn');
-        const originalText = submitBtn.textContent;
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="loading-spinner"></span>Submitting...';
-
-        const botName = document.getElementById('botName').value;
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const botCode = document.getElementById('botCode').value;
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading-spinner"></span>Submitting...';
 
         try {
             const response = await fetch('/api/bots/submit', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    bot_name: botName,
-                    email: email,
-                    password: password,
-                    bot_code: botCode
+                    bot_name: document.getElementById('botName').value,
+                    bot_code: document.getElementById('botCode').value
                 })
             });
-
             const data = await response.json();
 
             if (data.success) {
-                showAlert('submitAlert',
-                    `Bot submitted successfully! Check your email for updates.`,
-                    'success'
-                );
+                showAlert('submitAlert', 'Bot submitted for review!', 'success');
                 document.getElementById('submitForm').reset();
                 setTimeout(() => {
-                    switchTab('status');
-                    document.getElementById('checkEmail').value = email;
-                    checkSubmissions();
-                }, 2000);
+                    switchTab('bots');
+                    loadMyBots();
+                }, 1500);
             } else {
-                showAlert('submitAlert',
-                    `Error: ${data.error || 'Submission failed'}`,
-                    'error'
-                );
+                showAlert('submitAlert', data.error || 'Submission failed', 'error');
             }
         } catch (error) {
-            console.error('Submission error:', error);
-            showAlert('submitAlert',
-                'Connection error. Please try again.',
-                'error'
-            );
+            showAlert('submitAlert', 'Connection error. Please try again.', 'error');
         } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
+            btn.disabled = false;
+            btn.textContent = 'Submit for Review';
         }
     }
 
-    async function checkSubmissions() {
-        const email = document.getElementById('checkEmail').value;
+    function openUpdate(submissionId, botName) {
+        updateSubmissionId = submissionId;
+        document.getElementById('updateBotName').textContent = botName;
+        document.getElementById('updateCode').value = '';
+        document.getElementById('updateModal').style.display = 'flex';
+    }
 
-        if (!email) {
-            showAlert('statusAlert', 'Please enter your email', 'error');
+    function closeUpdateModal() {
+        document.getElementById('updateModal').style.display = 'none';
+        updateSubmissionId = null;
+    }
+
+    async function submitUpdate() {
+        const code = document.getElementById('updateCode').value;
+        if (!code.trim()) {
+            showAlert('updateAlert', 'Please enter your updated code', 'error');
             return;
         }
 
-        const listElement = document.getElementById('submissionsList');
-        listElement.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>';
-
         try {
-            const response = await fetch(`/api/bots/my-submissions?email=${encodeURIComponent(email)}`);
+            const response = await fetch(`/api/bots/resubmit/${updateSubmissionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bot_code: code })
+            });
             const data = await response.json();
 
-            if (data.success && data.submissions.length > 0) {
-                listElement.innerHTML = data.submissions.map(sub => {
-                    const statusClass = {
-                        'pending_review': 'pending',
-                        'approved': 'approved',
-                        'rejected': 'rejected',
-                        'revision_requested': 'revision'
-                    }[sub.status] || 'pending';
-
-                    const statusText = {
-                        'pending_review': 'Pending Review',
-                        'approved': 'Approved',
-                        'rejected': 'Rejected',
-                        'revision_requested': 'Revision Requested'
-                    }[sub.status] || sub.status;
-
-                    let notesHtml = '';
-                    if (sub.review_notes && sub.review_notes.length > 0) {
-                        notesHtml = '<div class="review-notes">';
-                        notesHtml += '<strong>Review Notes:</strong>';
-                        sub.review_notes.forEach(note => {
-                            notesHtml += `
-                                <div class="review-note">
-                                    <div class="review-note-date">${new Date(note.date).toLocaleString()}</div>
-                                    <div>${note.action}: ${note.notes}</div>
-                                </div>
-                            `;
-                        });
-                        notesHtml += '</div>';
-                    }
-
-                    return `
-                        <div class="submission-card">
-                            <div class="submission-header">
-                                <div class="submission-name">${sub.bot_name}</div>
-                                <span class="status-badge status-${statusClass}">${statusText}</span>
-                            </div>
-                            <div class="submission-meta">
-                                Submitted: ${new Date(sub.submission_date).toLocaleString()}
-                                ${sub.revision_count > 0 ? ` | Revisions: ${sub.revision_count}` : ''}
-                            </div>
-                            ${notesHtml}
-                        </div>
-                    `;
-                }).join('');
+            if (data.success) {
+                closeUpdateModal();
+                loadMyBots();
             } else {
-                listElement.innerHTML = `
-                    <div class="empty-state">
-                        <h3>No submissions found</h3>
-                        <p>You haven't submitted any bots yet, or the email doesn't match.</p>
-                    </div>
-                `;
+                showAlert('updateAlert', data.error || 'Update failed', 'error');
             }
         } catch (error) {
-            console.error('Error checking submissions:', error);
-            showAlert('statusAlert', 'Error loading submissions', 'error');
-            listElement.innerHTML = '';
+            showAlert('updateAlert', 'Connection error', 'error');
         }
+    }
+
+    async function withdrawBot(submissionId) {
+        if (!confirm('Are you sure you want to withdraw this submission?')) return;
+
+        try {
+            const response = await fetch(`/api/bots/withdraw/${submissionId}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                loadMyBots();
+            } else {
+                alert(data.error || 'Withdrawal failed');
+            }
+        } catch (error) {
+            alert('Connection error');
+        }
+    }
+
+    function dismissBot(submissionId) {
+        const card = document.getElementById(`card-${submissionId}`);
+        if (card) card.remove();
     }
 
     function copyTemplate() {
@@ -386,10 +391,9 @@ class MyBot(PokerBotAPI):
             const btn = event.target;
             const originalText = btn.textContent;
             btn.textContent = 'Copied!';
-            setTimeout(() => {
-                btn.textContent = originalText;
-            }, 2000);
+            setTimeout(() => btn.textContent = originalText, 2000);
         });
     }
 </script>
+{% endif %}
 {% endblock %}

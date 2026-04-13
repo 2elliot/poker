@@ -6,7 +6,6 @@ Includes email notifications and comprehensive logging
 import os
 import json
 import hashlib
-import base64
 from datetime import datetime
 from typing import List, Dict, Optional
 from enum import Enum
@@ -112,57 +111,50 @@ class BotReviewSystem:
                         pass
                 raise
     
-    def submit_bot(self, bot_name: str, bot_code: str, 
-                   submitter_email: str, submitter_password: str) -> Dict:
+    def submit_bot(self, bot_name: str, bot_code: str,
+                   submitter_username: str) -> Dict:
         """
-        Submit a bot for review
+        Submit a bot for review (tied to a user account)
         """
-        self.logger.info(f"New bot submission attempt: {bot_name} from {submitter_email}")
-        
+        self.logger.info(f"New bot submission attempt: {bot_name} from {submitter_username}")
+
         with self._lock:
             # Reload submissions to get latest data
             self.submissions = self._load_submissions()
-            
-            # Check if bot name is taken
+
+            # Check if bot name is taken by another user
             if bot_name in self.submissions["approved_bots"]:
-                self.logger.warning(f"Bot name already exists: {bot_name}")
-                return {"success": False, "error": "Bot name already exists"}
-            
+                existing = self.submissions["approved_bots"][bot_name]
+                if existing.get("submitter_username") != submitter_username:
+                    return {"success": False, "error": "Bot name already taken by another user"}
+
             # Check if user has pending submissions for this name
             for sub_id, sub in self.submissions["submissions"].items():
-                if (sub["bot_name"] == bot_name and 
-                    sub["submitter_email"] == submitter_email and
-                    sub["status"] in [BotStatus.PENDING_REVIEW.value, 
+                if (sub["bot_name"] == bot_name and
+                    sub.get("submitter_username") == submitter_username and
+                    sub["status"] in [BotStatus.PENDING_REVIEW.value,
                                      BotStatus.REVISION_REQUESTED.value]):
-                    self.logger.warning(f"User already has pending submission: {bot_name}")
                     return {
-                        "success": False, 
+                        "success": False,
                         "error": f"You already have a pending submission for '{bot_name}'",
                         "submission_id": sub_id
                     }
-            
+
             # Generate submission ID
             submission_id = hashlib.sha256(
-                f"{bot_name}{submitter_email}{datetime.now().isoformat()}".encode()
+                f"{bot_name}{submitter_username}{datetime.now().isoformat()}".encode()
             ).hexdigest()[:12]
-            
+
             try:
                 # Store bot code in plaintext for review
                 code_file = os.path.join(self.review_directory, f"{submission_id}.py")
                 with open(code_file, 'w', encoding='utf-8') as f:
                     f.write(bot_code)
-                self.logger.debug(f"Bot code saved to {code_file}")
-                
-                # Store encrypted password (so admin can encrypt later)
-                password_file = os.path.join(self.review_directory, f"{submission_id}.pwd")
-                with open(password_file, 'w', encoding='utf-8') as f:
-                    f.write(base64.b64encode(submitter_password.encode()).decode())
-                self.logger.debug(f"Password saved to {password_file}")
-                
+
                 # Create submission record
                 self.submissions["submissions"][submission_id] = {
                     "bot_name": bot_name,
-                    "submitter_email": submitter_email,
+                    "submitter_username": submitter_username,
                     "submission_date": datetime.now().isoformat(),
                     "status": BotStatus.PENDING_REVIEW.value,
                     "code_file": code_file,
@@ -170,31 +162,23 @@ class BotReviewSystem:
                     "revision_count": 0
                 }
                 self._save_submissions()
-                
-                # Send notification emails (outside lock)
-                
+
                 self.logger.info(f"Bot submission successful: {bot_name} (ID: {submission_id})")
-                
+
                 result = {
                     "success": True,
                     "submission_id": submission_id,
-                    "message": f"Bot '{bot_name}' submitted for review. You'll receive an email when it's reviewed.",
+                    "message": f"Bot '{bot_name}' submitted for review.",
                     "status": BotStatus.PENDING_REVIEW.value
                 }
-                
+
             except Exception as e:
                 self.logger.error(f"Failed to submit bot {bot_name}: {str(e)}")
                 return {
                     "success": False,
                     "error": f"Submission failed: {str(e)}"
                 }
-        
-        # Send emails outside the lock to prevent blocking
-        try:
-            self._notify_admin_new_submission(submission_id, bot_name, submitter_email)
-        except Exception as e:
-            self.logger.warning(f"Email notification failed: {str(e)}")
-        
+
         return result
     
     def get_pending_submissions(self) -> List[Dict]:
@@ -220,7 +204,7 @@ class BotReviewSystem:
                         pending.append({
                             "submission_id": sub_id,
                             "bot_name": sub["bot_name"],
-                            "submitter_email": sub["submitter_email"],
+                            "submitter_username": sub.get("submitter_username", sub.get("submitter_email", "unknown")),
                             "submission_date": sub["submission_date"],
                             "code": code,
                             "code_lines": len(code.split('\n')),
@@ -263,7 +247,7 @@ class BotReviewSystem:
                     all_subs.append({
                         "submission_id": sub_id,
                         "bot_name": sub["bot_name"],
-                        "submitter_email": sub["submitter_email"],
+                        "submitter_username": sub.get("submitter_username", sub.get("submitter_email", "unknown")),
                         "submission_date": sub["submission_date"],
                         "status": sub["status"],
                         "code": code,
@@ -503,7 +487,7 @@ class BotReviewSystem:
                 # Move to approved bots
                 self.submissions["approved_bots"][submission["bot_name"]] = {
                     "submission_id": submission_id,
-                    "submitter_email": submission["submitter_email"],
+                    "submitter_username": submission.get("submitter_username", submission.get("submitter_email", "unknown")),
                     "approval_date": submission["approval_date"]
                 }
                 
@@ -527,16 +511,6 @@ class BotReviewSystem:
                     "success": False,
                     "error": f"Approval failed: {str(e)}"
                 }
-        
-        # Send notification outside lock
-        try:
-            self._notify_submitter_approved(
-                submission["submitter_email"], 
-                submission["bot_name"],
-                admin_notes
-            )
-        except Exception as e:
-            self.logger.warning(f"Approval email failed: {str(e)}")
         
         return result
     
@@ -577,16 +551,6 @@ class BotReviewSystem:
                     "error": f"Rejection failed: {str(e)}"
                 }
         
-        # Notify outside lock
-        try:
-            self._notify_submitter_rejected(
-                submission["submitter_email"],
-                submission["bot_name"],
-                reason
-            )
-        except Exception as e:
-            self.logger.warning(f"Rejection email failed: {str(e)}")
-        
         return {
             "success": True,
             "message": "Bot rejected"
@@ -625,52 +589,41 @@ class BotReviewSystem:
                     "error": f"Request failed: {str(e)}"
                 }
         
-        # Notify outside lock
-        try:
-            self._notify_submitter_revision_needed(
-                submission["submitter_email"],
-                submission["bot_name"],
-                feedback,
-                submission_id
-            )
-        except Exception as e:
-            self.logger.warning(f"Revision email failed: {str(e)}")
-        
         return {
             "success": True,
-            "message": "Revision requested, submitter notified"
+            "message": "Revision requested"
         }
     
-    def resubmit_bot(self, submission_id: str, new_code: str, 
-                     submitter_email: str) -> Dict:
-        """User resubmits after revision request"""
+    def resubmit_bot(self, submission_id: str, new_code: str,
+                     submitter_username: str) -> Dict:
+        """User resubmits after revision request or updates an approved bot"""
         self.logger.info(f"Bot resubmission: {submission_id}")
-        
+
         with self._lock:
             self.submissions = self._load_submissions()
-            
+
             if submission_id not in self.submissions["submissions"]:
-                self.logger.warning(f"Submission not found: {submission_id}")
                 return {"success": False, "error": "Submission not found"}
-            
+
             submission = self.submissions["submissions"][submission_id]
-            
-            # Verify it's the same submitter
-            if submission["submitter_email"] != submitter_email:
-                self.logger.warning(f"Unauthorized resubmission attempt for {submission_id}")
+
+            # Verify ownership
+            if submission.get("submitter_username", submission.get("submitter_email")) != submitter_username:
                 return {"success": False, "error": "Unauthorized"}
-            
-            # Check status
-            if submission["status"] != BotStatus.REVISION_REQUESTED.value:
-                self.logger.warning(f"Invalid resubmission status for {submission_id}")
-                return {"success": False, "error": "This submission is not awaiting revision"}
-            
+
+            # Allow resubmission from revision_requested or approved status
+            allowed = [BotStatus.REVISION_REQUESTED.value, BotStatus.APPROVED.value]
+            if submission["status"] not in allowed:
+                return {"success": False, "error": "This submission cannot be updated right now"}
+
             try:
-                # Update the code file
-                with open(submission["code_file"], 'w', encoding='utf-8') as f:
+                # Write updated code
+                code_file = submission.get("code_file") or os.path.join(self.review_directory, f"{submission_id}.py")
+                with open(code_file, 'w', encoding='utf-8') as f:
                     f.write(new_code)
-                
-                # Reset status to pending review
+                submission["code_file"] = code_file
+
+                # Reset to pending review
                 submission["status"] = BotStatus.PENDING_REVIEW.value
                 submission["resubmission_date"] = datetime.now().isoformat()
                 submission["review_notes"].append({
@@ -678,41 +631,53 @@ class BotReviewSystem:
                     "action": "resubmitted",
                     "notes": "Code updated by submitter"
                 })
-                
+
                 self._save_submissions()
-                
                 self.logger.info(f"Bot resubmitted successfully: {submission['bot_name']}")
-                
+
             except Exception as e:
                 self.logger.error(f"Error resubmitting bot {submission_id}: {str(e)}")
-                return {
-                    "success": False,
-                    "error": f"Resubmission failed: {str(e)}"
-                }
-        
-        # Notify outside lock
-        try:
-            self._notify_admin_resubmission(submission_id, submission["bot_name"])
-        except Exception as e:
-            self.logger.warning(f"Resubmission notification failed: {str(e)}")
-        
-        return {
-            "success": True,
-            "message": "Bot resubmitted for review"
-        }
-    
-    def get_user_submissions(self, email: str) -> List[Dict]:
-        """Get all submissions for a user - THREAD SAFE"""
-        self.logger.debug(f"Retrieving submissions for user: {email}")
-        
+                return {"success": False, "error": f"Resubmission failed: {str(e)}"}
+
+        return {"success": True, "message": "Bot resubmitted for review"}
+
+    def withdraw_submission(self, submission_id: str, submitter_username: str) -> Dict:
+        """User withdraws a pending submission"""
         with self._lock:
-            # Always reload to get latest data
             self.submissions = self._load_submissions()
-            
+
+            if submission_id not in self.submissions["submissions"]:
+                return {"success": False, "error": "Submission not found"}
+
+            submission = self.submissions["submissions"][submission_id]
+
+            # Verify ownership
+            if submission.get("submitter_username", submission.get("submitter_email")) != submitter_username:
+                return {"success": False, "error": "Unauthorized"}
+
+            # Only allow withdrawing non-approved submissions
+            if submission["status"] == BotStatus.APPROVED.value:
+                return {"success": False, "error": "Cannot withdraw an approved bot. Use 'update' instead."}
+
+            # Clean up files and remove the submission
+            self._cleanup_submission_files(submission_id)
+            del self.submissions["submissions"][submission_id]
+            self._save_submissions()
+
+            self.logger.info(f"Submission withdrawn: {submission['bot_name']} by {submitter_username}")
+
+        return {"success": True, "message": "Submission withdrawn"}
+    
+    def get_user_submissions(self, username: str) -> List[Dict]:
+        """Get all submissions for a user by username"""
+        with self._lock:
+            self.submissions = self._load_submissions()
+
             user_subs = []
-            
+
             for sub_id, sub in self.submissions["submissions"].items():
-                if sub["submitter_email"] == email:
+                sub_owner = sub.get("submitter_username", sub.get("submitter_email"))
+                if sub_owner == username:
                     user_subs.append({
                         "submission_id": sub_id,
                         "bot_name": sub["bot_name"],
@@ -721,8 +686,7 @@ class BotReviewSystem:
                         "review_notes": sub.get("review_notes", []),
                         "revision_count": sub.get("revision_count", 0)
                     })
-            
-            self.logger.debug(f"Found {len(user_subs)} submissions for {email}")
+
             return user_subs
     
     def _cleanup_submission_files(self, submission_id: str):
@@ -731,7 +695,7 @@ class BotReviewSystem:
             os.path.join(self.review_directory, f"{submission_id}.py"),
             os.path.join(self.review_directory, f"{submission_id}.pwd")
         ]
-        
+
         for file_path in files:
             if os.path.exists(file_path):
                 try:
@@ -739,75 +703,3 @@ class BotReviewSystem:
                     self.logger.debug(f"Cleaned up file: {file_path}")
                 except Exception as e:
                     self.logger.error(f"Failed to remove file {file_path}: {str(e)}")
-    
-    def _notify_admin_new_submission(self, sub_id: str, bot_name: str, email: str):
-        """Send notification to admin about new submission"""
-        try:
-            from email_notifications import email_notifier
-            admin_email = os.environ.get('ADMIN_EMAIL')
-            
-            if admin_email:
-                email_notifier.notify_admin_new_submission(
-                    admin_email, bot_name, email, sub_id
-                )
-                self.logger.info(f"Admin notification sent for {bot_name}")
-            
-            # Also send confirmation to user
-            email_notifier.notify_submission_received(bot_name, email, sub_id)
-            self.logger.info(f"Confirmation email sent to {email}")
-            
-        except Exception as e:
-            self.logger.warning(f"Email notification failed for {bot_name}: {str(e)}")
-            self.logger.info(f"[ADMIN NOTIFICATION] New bot submission: {bot_name} from {email}")
-            self.logger.info(f"Review at: /admin/review")
-    
-    def _notify_admin_resubmission(self, sub_id: str, bot_name: str):
-        """Notify admin about resubmission"""
-        try:
-            from email_notifications import email_notifier
-            admin_email = os.environ.get('ADMIN_EMAIL')
-            
-            if admin_email:
-                submission = self.submissions["submissions"][sub_id]
-                email_notifier.notify_admin_new_submission(
-                    admin_email, bot_name, submission['submitter_email'], sub_id
-                )
-                self.logger.info(f"Admin notified about resubmission: {bot_name}")
-                
-        except Exception as e:
-            self.logger.warning(f"Resubmission notification failed: {str(e)}")
-            self.logger.info(f"[ADMIN NOTIFICATION] Bot resubmitted: {bot_name}")
-    
-    def _notify_submitter_approved(self, email: str, bot_name: str, notes: str = ""):
-        """Notify submitter their bot was approved"""
-        try:
-            from email_notifications import email_notifier
-            email_notifier.notify_bot_approved(bot_name, email, notes)
-            self.logger.info(f"Approval notification sent to {email}")
-            
-        except Exception as e:
-            self.logger.warning(f"Approval email failed: {str(e)}")
-            self.logger.info(f"[EMAIL to {email}] Your bot '{bot_name}' has been approved!")
-    
-    def _notify_submitter_rejected(self, email: str, bot_name: str, reason: str):
-        """Notify submitter their bot was rejected"""
-        try:
-            from email_notifications import email_notifier
-            email_notifier.notify_bot_rejected(bot_name, email, reason)
-            self.logger.info(f"Rejection notification sent to {email}")
-            
-        except Exception as e:
-            self.logger.warning(f"Rejection email failed: {str(e)}")
-            self.logger.info(f"[EMAIL to {email}] Your bot '{bot_name}' was rejected: {reason}")
-    
-    def _notify_submitter_revision_needed(self, email: str, bot_name: str, 
-                                         feedback: str, sub_id: str):
-        """Notify submitter that revisions are needed"""
-        try:
-            from email_notifications import email_notifier
-            email_notifier.notify_revision_requested(bot_name, email, feedback, sub_id)
-            self.logger.info(f"Revision request sent to {email}")
-            
-        except Exception as e:
-            self.logger.warning(f"Revision email failed: {str(e)}")
-            self.logger.info(f"[EMAIL to {email}] Your bot '{bot_name}' needs revisions: {feedback}")

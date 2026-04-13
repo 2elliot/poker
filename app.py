@@ -53,14 +53,16 @@ app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024  # 1MB max file size
 # Flask-Login setup
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login_page' # type: ignore
+login_manager.login_view = 'user_login_page' # type: ignore
 
 @login_manager.unauthorized_handler
 def unauthorized():
-    """Return JSON for API requests instead of redirecting to login page"""
+    """Redirect to appropriate login page based on route"""
     if request.path.startswith('/api/'):
         return jsonify({"success": False, "error": "Not authenticated"}), 401
-    return redirect(url_for('login_page'))
+    if request.path.startswith('/admin'):
+        return redirect(url_for('login_page'))
+    return redirect(url_for('user_login_page'))
 
 # Initialize systems - ALL DATA PERSISTS
 auth_system = AdminAuthSystem()
@@ -276,113 +278,80 @@ def get_available_bots():
 
 
 @app.route('/api/bots/submit', methods=['POST'])
+@login_required
 def submit_bot():
-    """PUBLIC - Submit a bot for review"""
+    """Submit a bot for review (requires login)"""
     try:
         data = request.json
-        
-        # Validate required fields
-        required_fields = ['bot_name', 'bot_code', 'email', 'password']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({
-                    'success': False,
-                    'error': f'Missing required field: {field}'
-                }), 400
-        
-        bot_name = data['bot_name'].strip()
-        bot_code = data['bot_code']
-        submitter_email = data['email'].strip()
-        submitter_password = data['password']
-        
-        # Basic validation
+        bot_name = data.get('bot_name', '').strip()
+        bot_code = data.get('bot_code', '')
+
+        if not bot_name or not bot_code:
+            return jsonify({'success': False, 'error': 'Bot name and code are required'}), 400
+
         if len(bot_name) < 3 or len(bot_name) > 50:
-            return jsonify({
-                'success': False,
-                'error': 'Bot name must be between 3 and 50 characters'
-            }), 400
-        
-        if len(submitter_password) < 12:
-            return jsonify({
-                'success': False,
-                'error': 'Password must be at least 12 characters'
-            }), 400
-        
-        if len(bot_code) > 500 * 1024:  # 500KB limit
-            return jsonify({
-                'success': False,
-                'error': 'Bot code too large (max 500KB)'
-            }), 400
-        
-        # Submit to review system
+            return jsonify({'success': False, 'error': 'Bot name must be between 3 and 50 characters'}), 400
+
+        if len(bot_code) > 500 * 1024:
+            return jsonify({'success': False, 'error': 'Bot code too large (max 500KB)'}), 400
+
         result = review_system.submit_bot(
             bot_name=bot_name,
             bot_code=bot_code,
-            submitter_email=submitter_email,
-            submitter_password=submitter_password
+            submitter_username=current_user.username
         )
-        
+
         if result['success']:
-            logging.info(f"New bot submission: {bot_name} from {submitter_email}")
-        
+            logging.info(f"New bot submission: {bot_name} from {current_user.username}")
+
         return jsonify(result)
-        
+
     except Exception as e:
         logging.error(f"Error submitting bot: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Submission failed. Please try again.'
-        }), 500
+        return jsonify({'success': False, 'error': 'Submission failed. Please try again.'}), 500
 
 
 @app.route('/api/bots/my-submissions', methods=['GET'])
+@login_required
 def get_my_submissions():
-    """PUBLIC - Get user's bot submissions"""
+    """Get current user's bot submissions"""
     try:
-        email = request.args.get('email', '').strip()
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email required'
-            }), 400
-        
-        submissions = review_system.get_user_submissions(email)
-        return jsonify({
-            'success': True,
-            'submissions': submissions
-        })
-        
+        submissions = review_system.get_user_submissions(current_user.username)
+        return jsonify({'success': True, 'submissions': submissions})
     except Exception as e:
         logging.error(f"Error getting submissions: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to load submissions'
-        }), 500
+        return jsonify({'success': False, 'error': 'Failed to load submissions'}), 500
 
 
 @app.route('/api/bots/resubmit/<submission_id>', methods=['POST'])
+@login_required
 def resubmit_bot(submission_id):
-    """PUBLIC - Resubmit a bot after revision request"""
+    """Resubmit/update a bot (requires login)"""
     try:
         data = request.json
         new_code = data.get('bot_code')
-        email = data.get('email', '').strip()
-        
-        if not all([new_code, email]):
-            return jsonify({
-                'success': False,
-                'error': 'Missing required fields'
-            }), 400
-        
-        result = review_system.resubmit_bot(submission_id, new_code, email)
+
+        if not new_code:
+            return jsonify({'success': False, 'error': 'Bot code is required'}), 400
+
+        result = review_system.resubmit_bot(submission_id, new_code, current_user.username)
         return jsonify(result)
-        
+
     except Exception as e:
         logging.error(f"Error resubmitting bot: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Resubmission failed'
-        }), 500
+        return jsonify({'success': False, 'error': 'Resubmission failed'}), 500
+
+
+@app.route('/api/bots/withdraw/<submission_id>', methods=['POST'])
+@login_required
+def withdraw_bot(submission_id):
+    """Withdraw a pending submission (requires login)"""
+    try:
+        result = review_system.withdraw_submission(submission_id, current_user.username)
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error withdrawing bot: {str(e)}")
+        return jsonify({'success': False, 'error': 'Withdrawal failed'}), 500
 
 
 # ============================================================================
