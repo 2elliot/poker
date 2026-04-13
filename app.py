@@ -419,6 +419,31 @@ def login_page():
     return render_template('admin_login.html')
 
 
+@app.route('/api/auth/debug', methods=['GET'])
+def auth_debug():
+    """TEMPORARY debug endpoint — remove after fixing login"""
+    data = auth_system._load_auth_data()
+    admins = {}
+    for name, info in data.get("admins", {}).items():
+        admins[name] = {
+            "exists": True,
+            "is_active": info.get("is_active", True),
+            "hash_prefix": info.get("password_hash", "")[:20] + "...",
+            "created_at": info.get("created_at"),
+        }
+    env_pw = os.environ.get('ADMIN_PASSWORD')
+    # Test if the env password actually verifies against the stored hash
+    test_result = None
+    if env_pw and "admin" in data.get("admins", {}):
+        test_result = auth_system._verify_password(env_pw, data["admins"]["admin"]["password_hash"])
+    return jsonify({
+        "admin_accounts": admins,
+        "ADMIN_PASSWORD_set": env_pw is not None,
+        "ADMIN_PASSWORD_length": len(env_pw) if env_pw else 0,
+        "env_password_matches_hash": test_result,
+    })
+
+
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     """Admin login endpoint"""
@@ -426,13 +451,13 @@ def login():
     username = data.get('username', '').strip()
     password = data.get('password', '')
     ip = request.remote_addr
-    
+
     if not username or not password:
         return jsonify({
-            "success": False, 
+            "success": False,
             "error": "Username and password required"
         }), 400
-    
+
     result = auth_system.authenticate(username, password, ip or "unknown")
     
     if result["success"]:
