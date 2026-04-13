@@ -371,12 +371,13 @@ class MyBot(PokerBotAPI):
             const data = await response.json();
 
             if (data.success) {
+                showToast('Submission withdrawn', 'success');
                 loadMyBots();
             } else {
-                alert(data.error || 'Withdrawal failed');
+                showToast(data.error || 'Withdrawal failed', 'error');
             }
         } catch (error) {
-            alert('Connection error');
+            showToast('Connection error', 'error');
         }
     }
 

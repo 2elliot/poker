@@ -495,12 +495,25 @@ def get_pending_submissions():
     try:
         # Use the new method that returns ALL submissions
         all_submissions = review_system.get_all_submissions_admin()
-        
+
         # Optionally filter by status if requested
         status_filter = request.args.get('status', None)
         if status_filter:
             all_submissions = [s for s in all_submissions if s['status'] == status_filter]
-        
+
+        # Enrich approved bots with match stats
+        for sub in all_submissions:
+            if sub.get('status') == 'approved':
+                stats = match_scheduler.get_bot_stats(sub['bot_name'])
+                if stats:
+                    sub['bot_stats'] = {
+                        'elo': stats['elo'],
+                        'hands_played': stats['hands_played'],
+                        'win_rate': stats['win_rate'],
+                        'tournaments_won': stats['tournaments_won'],
+                        'tournaments_played': stats['tournaments_played'],
+                    }
+
         return jsonify({
             "success": True,
             "submissions": all_submissions

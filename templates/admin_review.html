@@ -102,13 +102,23 @@
                     <div>
                         <h3 style="color: #fff; margin-bottom: 8px;">${escapeHtml(sub.bot_name)}</h3>
                         <div class="submission-meta">
-                            <span>by ${escapeHtml(sub.submitter_username || 'unknown')}</span>
+                            <span>by <strong>${escapeHtml(sub.submitter_username || 'unknown')}</strong></span>
                             <span>${new Date(sub.submission_date).toLocaleString()}</span>
                             ${sub.code_lines ? `<span>${sub.code_lines} lines</span>` : ''}
+                            ${sub.revision_count > 0 ? `<span>Rev. ${sub.revision_count}</span>` : ''}
                         </div>
                     </div>
                     <span class="status-badge status-${statusClass}">${statusText}</span>
                 </div>
+
+                ${sub.status === 'approved' && sub.bot_stats ? `
+                <div class="admin-bot-stats">
+                    <span title="Elo Rating">Elo: <strong>${Math.round(sub.bot_stats.elo)}</strong></span>
+                    <span title="Hands Played">Hands: <strong>${sub.bot_stats.hands_played.toLocaleString()}</strong></span>
+                    <span title="Win Rate">WR: <strong>${sub.bot_stats.win_rate}%</strong></span>
+                    <span title="Tournaments Won/Played">Tournaments: <strong>${sub.bot_stats.tournaments_won}W/${sub.bot_stats.tournaments_played}P</strong></span>
+                </div>
+                ` : ''}
 
                 ${sub.review_notes && sub.review_notes.length > 0 ? `
                     <div class="review-notes" style="margin-bottom: 15px;">
@@ -214,7 +224,7 @@
         const feedback = document.getElementById(`feedback-text-${submissionId}`).value;
 
         if (!feedback.trim()) {
-            alert('Please enter feedback');
+            showToast('Please enter feedback', 'error');
             return;
         }
 
@@ -239,15 +249,15 @@
             const result = await response.json();
 
             if (result.success) {
-                alert(`${result.message || 'Action completed successfully'}`);
+                showToast(result.message || 'Action completed successfully', 'success');
                 loadSubmissions();
             } else {
-                alert(`Error: ${result.error || 'Action failed'}`);
+                showToast(`Error: ${result.error || 'Action failed'}`, 'error');
             }
 
         } catch (error) {
             console.error('Action error:', error);
-            alert('Failed to perform action. Check console for details.');
+            showToast('Failed to perform action', 'error');
         }
     }
 

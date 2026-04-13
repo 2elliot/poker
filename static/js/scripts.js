@@ -517,11 +517,11 @@ function renderBotList() {
 function addBotToTable(botId) {
     if (state.mode !== 'custom') return;
     if (state.isPlaying) {
-        alert('Cannot add bots while tournament is running');
+        showToast('Cannot add bots while tournament is running', 'error');
         return;
     }
     if (state.tablePlayers.length >= MAX_PLAYERS) {
-        alert(`Maximum ${MAX_PLAYERS} players allowed`);
+        showToast(`Maximum ${MAX_PLAYERS} players allowed`, 'error');
         return;
     }
 
@@ -563,7 +563,7 @@ function addBotToTable(botId) {
 // Remove bot from table
 function removeBotFromTable(botId) {
     if (state.isPlaying) {
-        alert('Cannot remove bots while tournament is running');
+        showToast('Cannot remove bots while tournament is running', 'error');
         return;
     }
     state.tablePlayers = state.tablePlayers.filter(p => p.botId !== botId);
@@ -707,7 +707,7 @@ function findPlayer(pid) {
 // Initialize tournament on backend
 async function initializeTournament() {
     if (state.tablePlayers.length < MIN_PLAYERS) {
-        alert(`Need at least ${MIN_PLAYERS} players to start`);
+        showToast(`Need at least ${MIN_PLAYERS} players to start`, 'error');
         return false;
     }
 
