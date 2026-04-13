@@ -304,15 +304,19 @@ def get_available_bots():
     """Get list of APPROVED bots available for tournaments"""
     try:
         approved_bots = bot_storage.list_bots()
+        # Look up creator usernames from the review system
+        approved_map = review_system.submissions.get("approved_bots", {})
 
         bots_info = []
         for bot in approved_bots:
             # Merge scheduler stats if available
             sched_stats = match_scheduler.get_bot_stats(bot['name'])
+            creator = approved_map.get(bot['name'], {}).get('submitter_username', '')
             bots_info.append({
                 'id': bot['name'],
                 'name': bot['name'],
                 'type': 'Approved Bot',
+                'creator': creator,
                 'elo': sched_stats['elo'] if sched_stats else 1200,
                 'hands_played': sched_stats['hands_played'] if sched_stats else 0,
                 'win_rate': sched_stats['win_rate'] if sched_stats else 0,

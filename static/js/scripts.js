@@ -29,7 +29,7 @@ const state = {
     handInProgress: false,
 
     // Spectator state
-    spectatorSpeed: 1,
+    spectatorSpeed: 4,
     spectatorLastSeq: 0,
     spectatorPollTimer: null,
     spectatorReplayTimer: null,
@@ -409,9 +409,12 @@ function renderSpectatorSidebar() {
         .map(name => {
             const isOut = eliminated.includes(name);
             const chipCount = chips[name] || 0;
+            const botInfo = state.availableBots.find(b => b.name === name);
+            const creator = botInfo && botInfo.creator ? botInfo.creator : '';
             return `
                 <div class="bot-item" style="cursor: default; ${isOut ? 'opacity: 0.4;' : ''}">
                     <div class="bot-name">${name}</div>
+                    ${creator ? `<div class="bot-creator" style="font-size: 11px; color: #888; margin-top: -2px;">by ${creator}</div>` : ''}
                     <div class="bot-type" style="color: ${isOut ? '#e24a4a' : '#5cb85c'};">
                         ${isOut ? 'Eliminated' : chipCount.toLocaleString() + ' chips'}
                     </div>
@@ -508,7 +511,7 @@ function renderBotList() {
     botList.innerHTML = state.availableBots.map(bot => `
         <div class="bot-item" onclick="addBotToTable('${bot.id}')">
             <div class="bot-name">${bot.name}</div>
-            <div class="bot-type">${bot.type}</div>
+            <div class="bot-type">${bot.creator ? 'by ' + bot.creator : bot.type}</div>
         </div>
     `).join('');
 }
