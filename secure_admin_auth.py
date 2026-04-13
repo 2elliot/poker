@@ -31,6 +31,29 @@ class AdminAuthSystem:
         # Initialize auth file if doesn't exist
         if not os.path.exists(auth_file):
             self._create_default_admin()
+        else:
+            # If ADMIN_PASSWORD env var is set, ensure the admin account
+            # matches it — handles cases where the env var changed after
+            # the auth file was first created.
+            self._sync_admin_password()
+
+    def _sync_admin_password(self):
+        """Re-hash the default admin password if ADMIN_PASSWORD env var is set
+        and the stored hash no longer matches it."""
+        env_password = os.environ.get('ADMIN_PASSWORD')
+        if not env_password:
+            return  # No env var set, nothing to sync
+
+        data = self._load_auth_data()
+        admin = data["admins"].get("admin")
+        if not admin:
+            return
+
+        # Only update if the current hash doesn't match the env password
+        if not self._verify_password(env_password, admin["password_hash"]):
+            admin["password_hash"] = self._hash_password(env_password)
+            self._save_auth_data(data)
+            print("Admin password synced with ADMIN_PASSWORD environment variable")
 
     def _create_default_admin(self):
         """Create default admin account on first run"""
@@ -56,8 +79,10 @@ class AdminAuthSystem:
         print("ADMIN ACCOUNT CREATED")
         print("=" * 60)
         print(f"Username: admin")
-        print(f"Password: {default_password}")
-        print("\nSAVE THIS PASSWORD - IT WILL NOT BE SHOWN AGAIN!")
+        if default_password == 'admin':
+            print(f"Password: admin (default — set ADMIN_PASSWORD env var to change)")
+        else:
+            print(f"Password: (from ADMIN_PASSWORD environment variable)")
         print("=" * 60)
 
     def _hash_password(self, password: str) -> str:
