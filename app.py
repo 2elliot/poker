@@ -84,8 +84,9 @@ if not MASTER_PASSWORD:
     print("=" * 80)
     sys.exit(1)
 
-# Background match scheduler
+# Background match scheduler — starts automatically on import
 match_scheduler = MatchScheduler(bot_storage, MASTER_PASSWORD)
+match_scheduler.start()
 
 # Tournament state (temporary, cleared on restart - this is OK)
 tournament_state = {
@@ -1246,9 +1247,6 @@ if __name__ == '__main__':
     print()
     print("=" * 80)
     
-    # Start background match scheduler
-    match_scheduler.start()
-
     # Production mode check
     if os.environ.get('FLASK_ENV') == 'production':
         print("PRODUCTION MODE")
