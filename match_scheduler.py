@@ -93,10 +93,10 @@ class MatchScheduler:
         """
         Adaptive K-factor: high for new bots so they find their level fast,
         low for established bots so rankings stay stable.
-        K=32 at 0 matches, decays to 6 after ~50 matches.
+        K=16 at 0 matches, decays to 2 after ~30 matches.
         """
         tp = self.stats["bots"].get(bot_name, {}).get("tournaments_played", 0)
-        return max(6, 32 * (0.97 ** tp))
+        return max(2, 16 * (0.93 ** tp))
 
     def _elo_update_match(self, results: List[tuple]):
         """
