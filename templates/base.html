@@ -94,6 +94,7 @@
         var isLoggedIn = {{ 'true' if current_username else 'false' }};
         if (!isLoggedIn) return;
         if (localStorage.getItem('hideDiscordPopup')) return;
+        if (sessionStorage.getItem('discordPopupClosed')) return;
         setTimeout(function() {
             var popup = document.getElementById('discordPopup');
             if (popup) popup.style.display = 'flex';
@@ -103,6 +104,7 @@
     function closeDiscordPopup(event) {
         if (event && event.target !== document.getElementById('discordPopup')) return;
         document.getElementById('discordPopup').style.display = 'none';
+        sessionStorage.setItem('discordPopupClosed', '1');
     }
 
     function dismissDiscordPopup() {
