@@ -250,7 +250,17 @@ function handleSpectatorEvent(data) {
     } else if (event === 'deal') {
         state.handInProgress = true;
         state.communityCards = [];
-        state.tablePlayers.forEach(p => { p.folded = false; p.allIn = false; p.cards = []; p.bet = 0; });
+        const activePlayers = data.players || [];
+        state.tablePlayers.forEach(p => {
+            p.folded = false;
+            p.allIn = false;
+            p.cards = [];
+            p.bet = 0;
+            // Mark players not in this hand as eliminated
+            if (!activePlayers.includes(p.id)) {
+                p.chips = 0;
+            }
+        });
 
         // Set hole cards
         if (data.hole_cards) {

@@ -802,8 +802,7 @@ body.page-tournament {
 }
 
 .player-info.all-in {
-    border-color: #e2a14a;
-    box-shadow: 0 0 8px rgba(226, 161, 74, 0.3);
+    opacity: 1;
 }
 
 .player-status {
