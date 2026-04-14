@@ -63,13 +63,7 @@
 
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Navigation Tabs -->
-        <div class="nav-tabs">
-            <button class="nav-tab active" onclick="switchTab('game')">Game</button>
-            <button class="nav-tab" onclick="switchTab('stats')">Statistics</button>
-        </div>
-
-        <!-- Game Tab -->
+        <!-- Game View -->
         <div class="tab-content active" id="gameTab">
             <!-- Spectator Controls -->
             <div class="controls" id="spectatorControls">
@@ -136,20 +130,6 @@
                     <button class="console-clear" onclick="clearConsole()">Clear</button>
                 </div>
                 <div class="console-content" id="consoleContent"></div>
-            </div>
-        </div>
-
-        <!-- Statistics Tab -->
-        <div class="tab-content" id="statsTab">
-            <div class="stats-view">
-                <h2 style="margin-bottom: 20px; color: #fff;">Tournament Statistics</h2>
-
-                <div class="stats-grid" id="statsGrid"></div>
-
-                <div class="chart-container">
-                    <h3>Chips Over Time</h3>
-                    <canvas id="chipsChart"></canvas>
-                </div>
             </div>
         </div>
 

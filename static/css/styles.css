@@ -592,12 +592,16 @@ body.page-tournament {
     margin-top: 2px;
 }
 
-.spectator-bot-stats {
-    display: flex;
-    gap: 12px;
-    margin-top: 4px;
+.spectator-bot-view-stats {
+    margin-top: 6px;
     font-size: 11px;
-    color: #aaa;
+    color: #4a90e2;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.spectator-bot-item:hover .spectator-bot-view-stats {
+    opacity: 1;
 }
 
 /* Table seat highlight on sidebar hover */

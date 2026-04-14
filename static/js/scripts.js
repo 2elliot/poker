@@ -430,10 +430,8 @@ function renderSpectatorSidebar() {
 
     listEl.innerHTML = players.map(name => {
         const botInfo = state.availableBots.find(b => b.name === name);
-        const creator = botInfo && botInfo.creator ? botInfo.creator : '';
+        const creator = botInfo && botInfo.creator ? botInfo.creator : 'unknown';
         const elo = botInfo ? Math.round(botInfo.elo) : '--';
-        const winRate = botInfo ? botInfo.win_rate + '%' : '--';
-        const hands = botInfo ? botInfo.hands_played.toLocaleString() : '--';
         // Find seat index for hover highlight
         const seatIdx = state.tablePlayers.findIndex(p => p && p.name === name);
         return `
@@ -445,11 +443,8 @@ function renderSpectatorSidebar() {
                     <div class="bot-name">${name}</div>
                     <div class="spectator-bot-elo">${elo}</div>
                 </div>
-                ${creator ? `<div class="spectator-bot-creator">by ${creator}</div>` : ''}
-                <div class="spectator-bot-stats">
-                    <span>WR ${winRate}</span>
-                    <span>${hands} hands</span>
-                </div>
+                <div class="spectator-bot-creator">by ${creator}</div>
+                <div class="spectator-bot-view-stats">View Stats &#8250;</div>
             </div>
         `;
     }).join('');
@@ -1204,189 +1199,10 @@ function updateStatus() {
     }
 }
 
-function renderStatistics() {
-    const statsGrid = document.getElementById('statsGrid');
-
-    // In spectator mode, show stats for all tracked bots; in custom mode, show table players
-    const statNames = Object.keys(state.statistics);
-    if (statNames.length === 0 && state.tablePlayers.length === 0) {
-        statsGrid.innerHTML = '<p class="stats-empty">Statistics will appear after hands are played</p>';
-        drawChipsChart();
-        return;
-    }
-
-    const players = statNames.length > 0 ? statNames : state.tablePlayers.map(p => p.id);
-    const rows = players.map(name => {
-        const stats = state.statistics[name];
-        if (!stats) return '';
-        const tablePlayer = state.tablePlayers.find(p => p.id === name);
-        const chips = tablePlayer ? tablePlayer.chips : '--';
-        const isEliminated = tablePlayer && tablePlayer.chips <= 0 && !tablePlayer.allIn;
-        return `
-            <tr class="${isEliminated ? 'stats-row-eliminated' : ''}">
-                <td class="stats-cell-name">${name}</td>
-                <td>${stats.gamesPlayed}</td>
-                <td>${stats.wins}</td>
-                <td>${stats.winRate}%</td>
-                <td class="stats-cell-chips">${chips}</td>
-                <td class="stats-cell-won">+${stats.totalChipsWon}</td>
-                <td class="stats-cell-lost">-${stats.totalChipsLost}</td>
-            </tr>
-        `;
-    }).join('');
-
-    statsGrid.innerHTML = `
-        <table class="stats-table">
-            <thead>
-                <tr>
-                    <th>Player</th>
-                    <th>Hands</th>
-                    <th>Wins</th>
-                    <th>Win Rate</th>
-                    <th>Chips</th>
-                    <th>Won</th>
-                    <th>Lost</th>
-                </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-        </table>
-    `;
-
-    drawChipsChart();
-}
-
-// Draw chips over time chart
-function drawChipsChart() {
-    const canvas = document.getElementById('chipsChart');
-    const ctx = canvas.getContext('2d');
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-
-    const displayWidth = rect.width;
-    const displayHeight = rect.height;
-
-    ctx.clearRect(0, 0, displayWidth, displayHeight);
-
-    if (state.gamesPlayed === 0 || Object.keys(state.chipHistory).length === 0) {
-        ctx.fillStyle = '#666';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Play games to see chip progression', displayWidth / 2, displayHeight / 2);
-        return;
-    }
-
-    const padding = 40;
-    const chartWidth = displayWidth - padding * 2;
-    const chartHeight = displayHeight - padding * 2;
-
-    let maxChips = DEFAULT_STARTING_CHIPS;
-    let maxGames = state.gamesPlayed;
-
-    const chartPlayers = Object.keys(state.chipHistory);
-    chartPlayers.forEach(name => {
-        const history = state.chipHistory[name];
-        if (history) history.forEach(point => { maxChips = Math.max(maxChips, point.chips); });
-    });
-
-    // Draw axes
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, displayHeight - padding);
-    ctx.lineTo(displayWidth - padding, displayHeight - padding);
-    ctx.stroke();
-
-    // Draw grid lines
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i <= 5; i++) {
-        const y = padding + (chartHeight / 5) * i;
-        ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(displayWidth - padding, y);
-        ctx.stroke();
-
-        const chipValue = Math.round(maxChips - (maxChips / 5) * i);
-        ctx.fillStyle = '#888';
-        ctx.font = '10px Arial';
-        ctx.textAlign = 'right';
-        ctx.fillText(`${chipValue}`, padding - 5, y + 4);
-    }
-
-    // X-axis labels
-    ctx.fillStyle = '#888';
-    ctx.font = '10px Arial';
-    ctx.textAlign = 'center';
-    for (let i = 0; i <= Math.min(maxGames, 10); i++) {
-        const x = padding + (chartWidth / Math.min(maxGames, 10)) * i;
-        const gameNum = Math.round((maxGames / Math.min(maxGames, 10)) * i);
-        ctx.fillText(gameNum, x, displayHeight - padding + 15);
-    }
-
-    // Draw lines for each player
-    const colors = ['#4a90e2', '#e24a4a', '#5ac', '#f90', '#9c3', '#c6c', '#fc3', '#6cf', '#f6c'];
-
-    chartPlayers.forEach((name, idx) => {
-        const history = state.chipHistory[name];
-        if (!history || history.length === 0) return;
-
-        ctx.strokeStyle = colors[idx % colors.length];
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-
-        history.forEach((point, i) => {
-            const x = padding + (chartWidth / maxGames) * point.game;
-            const y = displayHeight - padding - (chartHeight * point.chips / maxChips);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        });
-
-        ctx.stroke();
-
-        // Draw legend
-        const legendX = displayWidth - padding - 150;
-        const legendY = padding + 20 + (idx * 20);
-        ctx.fillStyle = colors[idx % colors.length];
-        ctx.fillRect(legendX, legendY - 6, 12, 12);
-        ctx.fillStyle = '#e0e0e0';
-        ctx.font = '11px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText(name, legendX + 18, legendY + 4);
-    });
-
-    ctx.fillStyle = '#4a90e2';
-    ctx.font = 'bold 12px Arial';
-    ctx.textAlign = 'left';
-    ctx.fillText('Games', displayWidth / 2 - 20, displayHeight - 5);
-
-    ctx.save();
-    ctx.translate(15, displayHeight / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText('Chips', 0, 0);
-    ctx.restore();
-}
-
-window.addEventListener('resize', drawChipsChart);
-
-// Switch tabs
-function switchTab(tab) {
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-
-    if (tab === 'game') {
-        document.querySelectorAll('.nav-tab')[0].classList.add('active');
-        document.getElementById('gameTab').classList.add('active');
-    } else {
-        document.querySelectorAll('.nav-tab')[1].classList.add('active');
-        document.getElementById('statsTab').classList.add('active');
-        renderStatistics();
-    }
-}
+// Statistics tab removed — these are kept as no-ops so existing calls don't error
+function renderStatistics() {}
+function drawChipsChart() {}
+function switchTab() {}
 
 // ============================================================================
 // RESIZE HANDLES
