@@ -50,6 +50,13 @@ async function init() {
     setupLogStreaming();
     updateStatus();
     logToConsole('Poker tournament system initialized', 'event-phase');
+
+    // Reposition seats on window resize / zoom so the table stays correct
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => positionSeats(), 100);
+    });
 }
 
 // ============================================================================
@@ -749,6 +756,46 @@ function clearConsole() {
 }
 
 // Render table
+function positionSeats() {
+    const playerCount = state.tablePlayers.filter(p => p).length;
+    if (playerCount === 0) return;
+
+    const table = document.getElementById('pokerTable');
+    if (!table) return;
+
+    const tableW = table.offsetWidth;
+    const tableH = table.offsetHeight;
+
+    // Measure a seat element to know how much padding to leave
+    const sampleSeat = document.querySelector('.player-seat:not(.empty)');
+    const seatW = sampleSeat ? sampleSeat.offsetWidth : 120;
+    const seatH = sampleSeat ? sampleSeat.offsetHeight : 80;
+
+    // Ellipse radii: shrink inward so seats don't overflow the container.
+    // More players → tighter fit to avoid overlap.
+    const padX = (seatW / 2 / tableW) * 100 + 2;   // half seat width as % + small gap
+    const padY = (seatH / 2 / tableH) * 100 + 2;
+    const rx = Math.min(52, 50 - padX + 4);          // clamp so seats stay within bounds
+    const ry = Math.min(52, 50 - padY + 4);
+    const cx = 50;
+    const cy = 50;
+
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+        const seat = document.querySelector(`[data-seat="${i}"]`);
+        if (!state.tablePlayers[i]) continue;
+
+        // Distribute evenly around an ellipse, starting from top-center going clockwise
+        const angle = (2 * Math.PI * i / playerCount) - Math.PI / 2;
+
+        const x = cx + rx * Math.cos(angle);
+        const y = cy + ry * Math.sin(angle);
+
+        seat.style.left = x + '%';
+        seat.style.top = y + '%';
+        seat.style.transform = 'translate(-50%, -50%)';
+    }
+}
+
 function renderTable() {
     const emptyMessage = document.getElementById('emptyMessage');
     const pokerTable = document.getElementById('pokerTable');
@@ -761,6 +808,9 @@ function renderTable() {
 
     emptyMessage.style.display = 'none';
     pokerTable.style.display = 'block';
+
+    // Position seats dynamically around the table
+    positionSeats();
 
     for (let i = 0; i < MAX_PLAYERS; i++) {
         const seat = document.querySelector(`[data-seat="${i}"]`);
@@ -780,13 +830,16 @@ function renderTable() {
                     ${isAllIn ? '<div class="player-status allin-tag">ALL-IN</div>' : ''}
                     ${isFolded && !isEliminated ? '<div class="player-status folded-tag">FOLDED</div>' : ''}
                 </div>
-                <div class="player-cards pos-${i}">
+                <div class="player-cards">
                     ${renderPlayerCards(player)}
                 </div>
             `;
         } else {
             seat.classList.add('empty');
             seat.innerHTML = '';
+            seat.style.left = '';
+            seat.style.top = '';
+            seat.style.transform = '';
         }
     }
 
