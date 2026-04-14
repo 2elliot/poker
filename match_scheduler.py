@@ -584,11 +584,30 @@ class MatchScheduler:
         }
 
     def reset_stats(self):
-        """Reset all leaderboard stats. Bots keep their entries but all numbers go to defaults."""
+        """Reset all leaderboard stats. Stops the scheduler to prevent in-flight matches
+        from overwriting the clean state, then restarts it."""
+        # Stop scheduler so no in-flight match can write back stale data
+        was_running = self._thread and self._thread.is_alive()
+        if was_running:
+            self.stop()
+
         with self._lock:
             self.stats = {"bots": {}, "matches": [], "match_count": 0}
             self._save_stats()
+            self.live_match = None
+            self._live_events = []
+            self._event_seq = 0
+
+        # Clear wins/total_games in bot storage metadata
+        for bot_name in list(self.bot_storage.metadata.get("bots", {}).keys()):
+            self.bot_storage.metadata["bots"][bot_name]["wins"] = 0
+            self.bot_storage.metadata["bots"][bot_name]["total_games"] = 0
+        self.bot_storage._save_metadata()
+
         self.logger.info("All leaderboard stats have been reset")
+
+        if was_running:
+            self.start()
 
     def delete_bot_stats(self, bot_name: str):
         """Remove a single bot from the stats."""
