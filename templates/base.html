@@ -89,10 +89,11 @@
     </div>
 
     <script>
-    // Show Discord popup if user hasn't dismissed it
+    // Show Discord popup if user is logged in and hasn't dismissed it
     (function() {
+        var isLoggedIn = {{ 'true' if current_username else 'false' }};
+        if (!isLoggedIn) return;
         if (localStorage.getItem('hideDiscordPopup')) return;
-        // Small delay so it doesn't flash on page load
         setTimeout(function() {
             var popup = document.getElementById('discordPopup');
             if (popup) popup.style.display = 'flex';
@@ -110,7 +111,6 @@
         } else {
             localStorage.removeItem('hideDiscordPopup');
         }
-        document.getElementById('discordPopup').style.display = 'none';
     }
     </script>
 
