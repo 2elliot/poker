@@ -23,6 +23,7 @@
             {% if is_admin %}
             <a href="/admin/review" class="nav-link {% block nav_admin %}{% endblock %}">Admin</a>
             {% endif %}
+            <a href="https://discord.gg/Babk3C7X8n" target="_blank" rel="noopener" class="nav-link nav-discord">Discord</a>
         </div>
         <div class="nav-user">
             {% if current_username %}
@@ -69,6 +70,48 @@
 
     // Confirm dialog replacement — still uses native confirm for now
     // (custom modals add complexity; confirm() is acceptable for destructive actions)
+    </script>
+
+    <!-- Discord Popup -->
+    <div class="modal-overlay" id="discordPopup" style="display: none;" onclick="closeDiscordPopup(event)">
+        <div class="modal-card discord-popup" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeDiscordPopup()">&times;</button>
+            <div class="discord-popup-content">
+                <h2>Join the Discord</h2>
+                <p>Chat with other players, get help building your bot, and stay up to date with tournament news.</p>
+                <a href="https://discord.gg/Babk3C7X8n" target="_blank" rel="noopener" class="btn discord-join-btn">Join Discord Server</a>
+                <label class="discord-dismiss">
+                    <input type="checkbox" id="discordDontShow" onchange="dismissDiscordPopup()">
+                    Don't show this again
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Show Discord popup if user hasn't dismissed it
+    (function() {
+        if (localStorage.getItem('hideDiscordPopup')) return;
+        // Small delay so it doesn't flash on page load
+        setTimeout(function() {
+            var popup = document.getElementById('discordPopup');
+            if (popup) popup.style.display = 'flex';
+        }, 1000);
+    })();
+
+    function closeDiscordPopup(event) {
+        if (event && event.target !== document.getElementById('discordPopup')) return;
+        document.getElementById('discordPopup').style.display = 'none';
+    }
+
+    function dismissDiscordPopup() {
+        if (document.getElementById('discordDontShow').checked) {
+            localStorage.setItem('hideDiscordPopup', '1');
+        } else {
+            localStorage.removeItem('hideDiscordPopup');
+        }
+        document.getElementById('discordPopup').style.display = 'none';
+    }
     </script>
 
     <!-- Page Content -->

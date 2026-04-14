@@ -69,6 +69,15 @@ body {
     background: rgba(74, 144, 226, 0.1);
 }
 
+.nav-discord {
+    color: #7289da;
+}
+
+.nav-discord:hover {
+    color: #fff;
+    background: rgba(114, 137, 218, 0.2);
+}
+
 .nav-user {
     margin-left: auto;
     display: flex;
@@ -1655,6 +1664,54 @@ body.page-login {
 
 .modal-close:hover {
     color: #fff;
+}
+
+/* Discord popup */
+.discord-popup {
+    max-width: 420px;
+    text-align: center;
+}
+
+.discord-popup-content h2 {
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.discord-popup-content p {
+    color: #aaa;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.discord-join-btn {
+    display: inline-block;
+    background: #5865f2;
+    color: #fff;
+    padding: 12px 28px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.discord-join-btn:hover {
+    background: #4752c4;
+}
+
+.discord-dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 18px;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+}
+
+.discord-dismiss input {
+    cursor: pointer;
 }
 
 .bot-profile-header {
