@@ -58,12 +58,16 @@ class MatchScheduler:
                 pass
         return {"bots": {}, "matches": [], "match_count": 0}
 
+    def _write_stats_to_disk(self):
+        """Write stats to disk. Caller must already hold self._lock."""
+        tmp = self.stats_file + ".tmp"
+        with open(tmp, 'w') as f:
+            json.dump(self.stats, f, indent=2)
+        os.replace(tmp, self.stats_file)
+
     def _save_stats(self):
         with self._lock:
-            tmp = self.stats_file + ".tmp"
-            with open(tmp, 'w') as f:
-                json.dump(self.stats, f, indent=2)
-            os.replace(tmp, self.stats_file)
+            self._write_stats_to_disk()
 
     def _ensure_bot_entry(self, name: str):
         if name not in self.stats["bots"]:
@@ -598,7 +602,7 @@ class MatchScheduler:
         """Actually perform the stats reset — called from the scheduler loop."""
         with self._lock:
             self.stats = {"bots": {}, "matches": [], "match_count": 0}
-            self._save_stats()
+            self._write_stats_to_disk()
             self.live_match = None
             self._live_events = []
             self._event_seq = 0
@@ -616,7 +620,7 @@ class MatchScheduler:
         """Remove a single bot from the stats."""
         with self._lock:
             self.stats["bots"].pop(bot_name, None)
-            self._save_stats()
+            self._write_stats_to_disk()
         self.logger.info(f"Stats deleted for bot: {bot_name}")
 
     def get_bot_stats(self, bot_name: str) -> Optional[Dict]:
