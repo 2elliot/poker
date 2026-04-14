@@ -43,6 +43,7 @@ class MatchScheduler:
         # Event buffer for spectator replay — list of dicts
         self._live_events: List[Dict] = []
         self._event_seq: int = 0
+        self._pending_reset: bool = False
 
     # ------------------------------------------------------------------
     # Stats persistence
@@ -508,6 +509,10 @@ class MatchScheduler:
         self.logger.info("Match scheduler started")
         while not self._stop_event.is_set():
             try:
+                # Apply pending reset between matches (safe — no match in flight)
+                if self._pending_reset:
+                    self._apply_reset()
+
                 bot_names = self._pick_bots()
                 if len(bot_names) >= self.min_bots:
                     self._run_single_match(bot_names)
@@ -584,13 +589,13 @@ class MatchScheduler:
         }
 
     def reset_stats(self):
-        """Reset all leaderboard stats. Stops the scheduler to prevent in-flight matches
-        from overwriting the clean state, then restarts it."""
-        # Stop scheduler so no in-flight match can write back stale data
-        was_running = self._thread and self._thread.is_alive()
-        if was_running:
-            self.stop()
+        """Schedule a stats reset. The scheduler loop picks this up between matches
+        so we don't block the request or race with an in-flight match."""
+        self._pending_reset = True
+        self.logger.info("Leaderboard reset scheduled (will apply before next match)")
 
+    def _apply_reset(self):
+        """Actually perform the stats reset — called from the scheduler loop."""
         with self._lock:
             self.stats = {"bots": {}, "matches": [], "match_count": 0}
             self._save_stats()
@@ -604,10 +609,8 @@ class MatchScheduler:
             self.bot_storage.metadata["bots"][bot_name]["total_games"] = 0
         self.bot_storage._save_metadata()
 
+        self._pending_reset = False
         self.logger.info("All leaderboard stats have been reset")
-
-        if was_running:
-            self.start()
 
     def delete_bot_stats(self, bot_name: str):
         """Remove a single bot from the stats."""
