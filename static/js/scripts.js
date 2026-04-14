@@ -93,6 +93,15 @@ function setMode(mode) {
         // Stop spectator
         stopSpectatorPolling();
 
+        // Clear table state for a fresh custom session
+        state.tablePlayers = [];
+        state.isPlaying = false;
+        state.tournamentInitialized = false;
+        state.handInProgress = false;
+        state.communityCards = [];
+        state.pot = 0;
+        stopGameLoop();
+
         // Update empty message
         const emptyMsg = document.getElementById('emptyMessage');
         emptyMsg.querySelector('h3').textContent = 'No Players at Table';
@@ -401,27 +410,141 @@ function renderSpectatorSidebar() {
     statusEl.textContent = status;
 
     const players = match.players || [];
-    const chips = match.chips || {};
-    const eliminated = match.eliminated || [];
 
-    listEl.innerHTML = players
-        .sort((a, b) => (chips[b] || 0) - (chips[a] || 0))
-        .map(name => {
-            const isOut = eliminated.includes(name);
-            const chipCount = chips[name] || 0;
-            const botInfo = state.availableBots.find(b => b.name === name);
-            const creator = botInfo && botInfo.creator ? botInfo.creator : '';
-            return `
-                <div class="bot-item" style="cursor: default; ${isOut ? 'opacity: 0.4;' : ''}">
+    listEl.innerHTML = players.map(name => {
+        const botInfo = state.availableBots.find(b => b.name === name);
+        const creator = botInfo && botInfo.creator ? botInfo.creator : '';
+        const elo = botInfo ? Math.round(botInfo.elo) : '--';
+        const winRate = botInfo ? botInfo.win_rate + '%' : '--';
+        const hands = botInfo ? botInfo.hands_played.toLocaleString() : '--';
+        // Find seat index for hover highlight
+        const seatIdx = state.tablePlayers.findIndex(p => p && p.name === name);
+        return `
+            <div class="bot-item spectator-bot-item"
+                 onclick="openBotProfile('${name}')"
+                 onmouseenter="highlightSeat(${seatIdx})"
+                 onmouseleave="unhighlightSeat(${seatIdx})">
+                <div class="spectator-bot-header">
                     <div class="bot-name">${name}</div>
-                    ${creator ? `<div class="bot-creator" style="font-size: 11px; color: #888; margin-top: -2px;">by ${creator}</div>` : ''}
-                    <div class="bot-type" style="color: ${isOut ? '#e24a4a' : '#5cb85c'};">
-                        ${isOut ? 'Eliminated' : chipCount.toLocaleString() + ' chips'}
+                    <div class="spectator-bot-elo">${elo}</div>
+                </div>
+                ${creator ? `<div class="spectator-bot-creator">by ${creator}</div>` : ''}
+                <div class="spectator-bot-stats">
+                    <span>WR ${winRate}</span>
+                    <span>${hands} hands</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function highlightSeat(seatIdx) {
+    if (seatIdx < 0) return;
+    const seat = document.querySelector(`[data-seat="${seatIdx}"]`);
+    if (seat) seat.classList.add('seat-highlighted');
+}
+
+function unhighlightSeat(seatIdx) {
+    if (seatIdx < 0) return;
+    const seat = document.querySelector(`[data-seat="${seatIdx}"]`);
+    if (seat) seat.classList.remove('seat-highlighted');
+}
+
+function getStyleLabel(vpip, pfr) {
+    if (!vpip && !pfr) return '';
+    if (vpip > 40 && pfr > 25) return 'LAG';
+    if (vpip > 40) return 'LP';
+    if (pfr > 20) return 'TAG';
+    return 'TP';
+}
+
+function getStyleClass(label) {
+    const map = { 'LAG': 'style-lag', 'LP': 'style-lp', 'TAG': 'style-tag', 'TP': 'style-tp' };
+    return map[label] || '';
+}
+
+function getStyleFullName(label) {
+    const map = { 'LAG': 'Loose-Aggressive', 'LP': 'Loose-Passive', 'TAG': 'Tight-Aggressive', 'TP': 'Tight-Passive' };
+    return map[label] || label;
+}
+
+async function openBotProfile(botName) {
+    const modal = document.getElementById('botProfileModal');
+    if (!modal) return;
+    const content = document.getElementById('botProfileContent');
+    modal.style.display = 'flex';
+    content.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>';
+
+    try {
+        const response = await fetch(`/api/bot-stats/${encodeURIComponent(botName)}`);
+        const data = await response.json();
+
+        if (!data.success) {
+            content.innerHTML = `<div class="alert alert-error show">${data.error || 'Failed to load'}</div>`;
+            return;
+        }
+
+        const s = data.stats;
+        const style = getStyleLabel(s.vpip, s.pfr);
+        const mbb = s.mbb_per_hand !== null ? s.mbb_per_hand : '--';
+        const mbbClass = s.mbb_per_hand > 0 ? 'stats-cell-won' : s.mbb_per_hand < 0 ? 'stats-cell-lost' : '';
+        const netClass = s.net_chips >= 0 ? 'stats-cell-won' : 'stats-cell-lost';
+
+        content.innerHTML = `
+            <div class="bot-profile">
+                <div class="bot-profile-header">
+                    <h2>${s.name}</h2>
+                    <span class="bot-profile-creator">by ${s.creator || 'unknown'}</span>
+                    ${style ? `<span class="lb-style-tag ${getStyleClass(style)}" style="margin-left: 10px;">${getStyleFullName(style)}</span>` : ''}
+                </div>
+                <div class="bot-profile-grid">
+                    <div class="bot-stat-card">
+                        <div class="bot-stat-value lb-elo">${Math.round(s.elo)}</div>
+                        <div class="bot-stat-label">Elo Rating</div>
+                    </div>
+                    <div class="bot-stat-card">
+                        <div class="bot-stat-value ${mbbClass}">${mbb}</div>
+                        <div class="bot-stat-label">mbb/hand</div>
+                    </div>
+                    <div class="bot-stat-card">
+                        <div class="bot-stat-value">${s.win_rate}%</div>
+                        <div class="bot-stat-label">Win Rate</div>
+                    </div>
+                    <div class="bot-stat-card">
+                        <div class="bot-stat-value">${s.hands_played.toLocaleString()}</div>
+                        <div class="bot-stat-label">Hands Played</div>
                     </div>
                 </div>
-            `;
-        }).join('');
+                <div class="bot-profile-details">
+                    <table class="bot-detail-table">
+                        <tr><td>Hands Won</td><td>${s.hands_won.toLocaleString()}</td></tr>
+                        <tr><td>Tournaments</td><td>${s.tournaments_won}W / ${s.tournaments_played}P</td></tr>
+                        <tr><td>Chips Won</td><td class="stats-cell-won">+${s.chips_won.toLocaleString()}</td></tr>
+                        <tr><td>Chips Lost</td><td class="stats-cell-lost">-${s.chips_lost.toLocaleString()}</td></tr>
+                        <tr><td>Net Chips</td><td class="${netClass}">${s.net_chips >= 0 ? '+' : ''}${s.net_chips.toLocaleString()}</td></tr>
+                        <tr><td>VPIP</td><td>${s.vpip}%</td></tr>
+                        <tr><td>PFR</td><td>${s.pfr}%</td></tr>
+                        <tr><td>Calibrated</td><td>${s.calibrated ? 'Yes' : 'No (< 5,000 hands)'}</td></tr>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        content.innerHTML = '<div class="alert alert-error show">Failed to load bot stats</div>';
+    }
 }
+
+function closeBotProfile(event) {
+    const modal = document.getElementById('botProfileModal');
+    if (!modal) return;
+    if (event && event.target !== modal) return;
+    modal.style.display = 'none';
+}
+
+// Close modal on escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeBotProfile();
+});
 
 function changeSpectatorSpeed(delta) {
     const speeds = [0.25, 0.5, 1, 2, 4, 8];

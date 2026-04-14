@@ -169,6 +169,15 @@
         </div>
     </div>
 </div>
+<!-- Bot Profile Modal -->
+<div class="modal-overlay" id="botProfileModal" style="display: none;" onclick="closeBotProfile(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+        <button class="modal-close" onclick="closeBotProfile()">&times;</button>
+        <div id="botProfileContent">
+            <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

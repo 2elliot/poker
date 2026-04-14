@@ -569,6 +569,43 @@ body.page-tournament {
     color: #888;
 }
 
+/* Spectator sidebar bot cards */
+.spectator-bot-item {
+    padding: 10px 12px;
+}
+
+.spectator-bot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.spectator-bot-elo {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffd700;
+}
+
+.spectator-bot-creator {
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+}
+
+.spectator-bot-stats {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #aaa;
+}
+
+/* Table seat highlight on sidebar hover */
+.player-seat.seat-highlighted .player-info {
+    border-color: #ffd700;
+    box-shadow: 0 0 14px rgba(255, 215, 0, 0.4);
+}
+
 /* Main Content Area */
 .main-content {
     flex: 1;
