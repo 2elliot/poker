@@ -43,6 +43,8 @@ const state = {
 // ============================================================================
 
 async function init() {
+    // Load bot list first so spectator sidebar has Elo/creator data
+    await loadAvailableBots();
     // Start in spectator mode
     setMode('spectator');
     setupLogStreaming();
@@ -441,7 +443,7 @@ function renderSpectatorSidebar() {
                  onmouseleave="unhighlightSeat(${seatIdx})">
                 <div class="spectator-bot-header">
                     <div class="bot-name">${name}</div>
-                    <div class="spectator-bot-elo">${elo}</div>
+                    <div class="spectator-bot-elo"><span class="spectator-bot-elo-label">Elo</span> ${elo}</div>
                 </div>
                 <div class="spectator-bot-creator">by ${creator}</div>
                 <div class="spectator-bot-view-stats">View Stats &#8250;</div>

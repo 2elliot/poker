@@ -595,6 +595,14 @@ body.page-tournament {
     color: #ffd700;
 }
 
+.spectator-bot-elo-label {
+    font-size: 10px;
+    font-weight: 400;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .spectator-bot-creator {
     font-size: 11px;
     color: #888;
