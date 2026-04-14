@@ -88,27 +88,42 @@ class MatchScheduler:
     def _elo_expected(ra: float, rb: float) -> float:
         return 1.0 / (1.0 + 10 ** ((rb - ra) / 400))
 
-    def _elo_update_pairwise(self, results: Dict[str, int], k: float = 16):
+    def _get_k_factor(self, bot_name: str) -> float:
         """
-        Update Elo ratings using pairwise decomposition.
-        results: {bot_name: chip_delta} for the hand.
-        Each pair is compared; the bot with higher chip_delta 'wins'.
+        Adaptive K-factor: high for new bots so they find their level fast,
+        low for established bots so rankings stay stable.
+        K=32 at 0 matches, decays to 6 after ~50 matches.
         """
-        names = list(results.keys())
-        for i in range(len(names)):
-            for j in range(i + 1, len(names)):
-                a, b = names[i], names[j]
+        tp = self.stats["bots"].get(bot_name, {}).get("tournaments_played", 0)
+        return max(6, 32 * (0.97 ** tp))
+
+    def _elo_update_match(self, results: List[tuple]):
+        """
+        Update Elo ratings once per match based on final placement.
+        results: [(name, chips, position), ...] sorted by position (1 = winner).
+        Each pair is compared; the higher-placed bot 'wins'.
+        """
+        for i in range(len(results)):
+            for j in range(i + 1, len(results)):
+                a = results[i][0]
+                b = results[j][0]
+                pos_a = results[i][2]
+                pos_b = results[j][2]
+
                 ra = self.stats["bots"][a]["elo"]
                 rb = self.stats["bots"][b]["elo"]
                 ea = self._elo_expected(ra, rb)
                 eb = 1 - ea
 
-                if results[a] > results[b]:
+                if pos_a < pos_b:
                     sa, sb = 1, 0
-                elif results[a] < results[b]:
+                elif pos_a > pos_b:
                     sa, sb = 0, 1
                 else:
                     sa, sb = 0.5, 0.5
+
+                # Use the average K of both bots so the update is symmetric
+                k = (self._get_k_factor(a) + self._get_k_factor(b)) / 2
 
                 self.stats["bots"][a]["elo"] = round(ra + k * (sa - ea), 1)
                 self.stats["bots"][b]["elo"] = round(rb + k * (sb - eb), 1)
@@ -410,9 +425,6 @@ class MatchScheduler:
                 if p in preflop_raisers:
                     b["pfr_hands"] += 1
 
-            # Pairwise Elo update
-            self._elo_update_pairwise(chip_deltas)
-
             # Update live match summary
             self.live_match = {
                 "match_id": self.stats.get("match_count", 0) + 1,
@@ -428,8 +440,10 @@ class MatchScheduler:
             if tournament.should_rebalance_tables():
                 tournament.rebalance_tables()
 
-        # Match complete — record tournament-level stats
+        # Match complete — record tournament-level stats and update Elo once
         results = tournament.get_final_results()
+        self._elo_update_match(results)
+
         for name, chips, position in results:
             b = self.stats["bots"][name]
             b["tournaments_played"] += 1
