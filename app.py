@@ -24,7 +24,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
 from backend.tournament import TournamentSettings, TournamentType, PokerTournament
-from backend.bot_manager import BotManager
+from backend.bot_manager import BotManager, BOT_TURN_TIMEOUT
 from backend.engine.poker_game import PokerGame, PlayerAction
 
 # Import security systems
@@ -735,7 +735,7 @@ def _clear_hand_state():
 def initialize_tournament():
     """Initialize a new tournament with APPROVED bots only"""
     try:
-        from backend.bot_manager import BotWrapper
+        from backend.bot_manager import BotWrapper, BOT_TURN_TIMEOUT
 
         data = request.json
         selected_bot_names = data.get('bots', [])
@@ -756,7 +756,7 @@ def initialize_tournament():
             blind_increase_factor=1.5
         )
 
-        bot_manager = BotManager("players", 10.0)
+        bot_manager = BotManager("players", BOT_TURN_TIMEOUT)
         bot_manager.bots = {}
 
         player_names = []
@@ -792,7 +792,7 @@ def initialize_tournament():
                 unique_bot = bot_instance
 
             player_names.append(player_name)
-            bot_wrapper = BotWrapper(player_name, unique_bot, 10.0)
+            bot_wrapper = BotWrapper(player_name, unique_bot, BOT_TURN_TIMEOUT)
             bot_manager.bots[player_name] = bot_wrapper
 
         if len(player_names) < 2:

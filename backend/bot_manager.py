@@ -61,10 +61,13 @@ def timeout_context(seconds: float):
             timer.cancel()
 
 
+BOT_TURN_TIMEOUT = 0.05  # seconds (50ms) — max time a bot has to return an action
+
+
 class BotWrapper:
     """Wrapper for a poker bot that handles execution and errors"""
-    
-    def __init__(self, name: str, bot_instance: PokerBotAPI, timeout: float = 10.0):
+
+    def __init__(self, name: str, bot_instance: PokerBotAPI, timeout: float = BOT_TURN_TIMEOUT):
         self.name = name
         self.bot = bot_instance
         self.timeout = timeout
@@ -166,7 +169,7 @@ class BotWrapper:
 class BotManager:
     """Manages loading and execution of all poker bots"""
     
-    def __init__(self, players_directory: str = "players", timeout: float = 10.0):
+    def __init__(self, players_directory: str = "players", timeout: float = BOT_TURN_TIMEOUT):
         self.players_directory = players_directory
         self.timeout = timeout
         self.bots: Dict[str, BotWrapper] = {}
@@ -291,7 +294,7 @@ class BotManager:
 
 
 # Utility functions for safe bot execution
-def safe_bot_call(func, *args, timeout: float = 10.0, **kwargs):
+def safe_bot_call(func, *args, timeout: float = BOT_TURN_TIMEOUT, **kwargs):
     """
     Safely call a bot function with timeout protection
     Returns (success: bool, result: Any, error: Optional[str])

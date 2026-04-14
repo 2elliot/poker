@@ -394,6 +394,9 @@ function handleSpectatorEvent(data) {
 }
 
 function renderSpectatorSidebar() {
+    // Clear all seat highlights before re-rendering (old DOM elements won't fire mouseleave)
+    document.querySelectorAll('.seat-highlighted').forEach(el => el.classList.remove('seat-highlighted'));
+
     const match = state.spectatorMatch;
     const statusEl = document.getElementById('matchStatus');
     const listEl = document.getElementById('livePlayerList');

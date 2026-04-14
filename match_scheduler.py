@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 from backend.tournament import TournamentSettings, TournamentType, PokerTournament
-from backend.bot_manager import BotManager, BotWrapper
+from backend.bot_manager import BotManager, BotWrapper, BOT_TURN_TIMEOUT
 from backend.engine.poker_game import PokerGame, PlayerAction
 from secure_bot_storage import SecureBotStorage
 
@@ -157,7 +157,7 @@ class MatchScheduler:
         self.logger.info(f"Starting match: {', '.join(bot_names)}")
 
         # Load bot instances
-        bot_manager = BotManager("players", 10.0)
+        bot_manager = BotManager("players", BOT_TURN_TIMEOUT)
         bot_manager.bots = {}
         player_names = []
 
@@ -167,7 +167,7 @@ class MatchScheduler:
                 self.logger.warning(f"Could not load bot {name}, skipping match")
                 return
             player_names.append(name)
-            bot_manager.bots[name] = BotWrapper(name, instance, 10.0)
+            bot_manager.bots[name] = BotWrapper(name, instance, BOT_TURN_TIMEOUT)
 
         if len(player_names) < 2:
             return
