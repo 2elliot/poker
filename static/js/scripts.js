@@ -214,9 +214,6 @@ function handleSpectatorEvent(data) {
         state.tablePlayers = [];
         state.communityCards = [];
         state.pot = 0;
-        state.gamesPlayed = 0;
-        state.statistics = {};
-        state.chipHistory = {};
         state.spectatorPlayers = data.players || [];
 
         data.players.forEach((name, i) => {
@@ -231,22 +228,29 @@ function handleSpectatorEvent(data) {
                 folded: false,
                 allIn: false,
             });
-            state.statistics[name] = {
-                gamesPlayed: 0, wins: 0, winRate: 0,
-                totalChipsWon: 0, totalChipsLost: 0
-            };
-            state.chipHistory[name] = [{ game: 0, chips: chips }];
+            // Preserve stats across matches — only init if new bot
+            if (!state.statistics[name]) {
+                state.statistics[name] = {
+                    gamesPlayed: 0, wins: 0, winRate: 0,
+                    totalChipsWon: 0, totalChipsLost: 0
+                };
+            }
+            if (!state.chipHistory[name]) {
+                state.chipHistory[name] = [];
+            }
+            state.chipHistory[name].push({ game: state.gamesPlayed, chips: chips });
         });
 
         logToConsole('=== NEW MATCH STARTED ===', 'event-phase');
         logToConsole(`Players: ${data.players.join(', ')}`, 'event-action');
         renderTable();
+        renderStatistics();
         updateStatus();
 
     } else if (event === 'deal') {
         state.handInProgress = true;
         state.communityCards = [];
-        state.tablePlayers.forEach(p => { p.folded = false; p.cards = []; p.bet = 0; });
+        state.tablePlayers.forEach(p => { p.folded = false; p.allIn = false; p.cards = []; p.bet = 0; });
 
         // Set hole cards
         if (data.hole_cards) {
@@ -297,17 +301,24 @@ function handleSpectatorEvent(data) {
         const actionStr = formatActionName(data.player, data.action, data.amount);
         logToConsole(actionStr, 'event-action');
 
-        // Mark folded
+        // Mark folded or all-in
+        const actingPlayer = findPlayer(data.player);
         if (data.action === 'fold') {
-            const player = findPlayer(data.player);
-            if (player) player.folded = true;
+            if (actingPlayer) actingPlayer.folded = true;
+        }
+        if (data.action === 'all_in') {
+            if (actingPlayer) actingPlayer.allIn = true;
         }
 
         // Sync chips/bets
         if (data.chips) {
             for (const [pid, chips] of Object.entries(data.chips)) {
                 const player = findPlayer(pid);
-                if (player) player.chips = chips;
+                if (player) {
+                    player.chips = chips;
+                    // Also detect all-in by chips hitting 0 after a non-fold action
+                    if (chips === 0 && !player.folded) player.allIn = true;
+                }
             }
         }
         if (data.bets) {
@@ -398,19 +409,12 @@ function renderSpectatorSidebar() {
     document.querySelectorAll('.seat-highlighted').forEach(el => el.classList.remove('seat-highlighted'));
 
     const match = state.spectatorMatch;
-    const statusEl = document.getElementById('matchStatus');
     const listEl = document.getElementById('livePlayerList');
 
     if (!match) {
-        statusEl.textContent = 'Waiting for match...';
         listEl.innerHTML = '<div style="padding: 20px; color: #666; text-align: center;">No active match</div>';
         return;
     }
-
-    const status = match.status === 'playing'
-        ? `Hand ${match.hand_number || 0} / ${match.total_hands || '?'}`
-        : 'Match Complete';
-    statusEl.textContent = status;
 
     const players = match.players || [];
 
@@ -756,15 +760,17 @@ function renderTable() {
         const player = state.tablePlayers[i];
 
         if (player) {
-            const isEliminated = player.chips <= 0;
+            const isAllIn = player.allIn && player.chips <= 0;
+            const isEliminated = player.chips <= 0 && !isAllIn;
             const isFolded = player.folded;
             seat.classList.remove('empty');
             seat.innerHTML = `
-                <div class="player-info ${isEliminated ? 'eliminated' : ''} ${isFolded ? 'folded' : ''}">
+                <div class="player-info ${isEliminated ? 'eliminated' : ''} ${isAllIn ? 'all-in' : ''} ${isFolded ? 'folded' : ''}">
                     <div class="player-name">${player.name}</div>
-                    <div class="player-chips">${player.chips}</div>
+                    <div class="player-chips">${isAllIn ? 'ALL-IN' : player.chips}</div>
                     ${player.bet > 0 ? `<div class="player-bet">Bet: ${player.bet}</div>` : ''}
                     ${isEliminated ? '<div class="player-status eliminated-tag">ELIMINATED</div>' : ''}
+                    ${isAllIn ? '<div class="player-status allin-tag">ALL-IN</div>' : ''}
                     ${isFolded && !isEliminated ? '<div class="player-status folded-tag">FOLDED</div>' : ''}
                 </div>
                 <div class="player-cards pos-${i}">
@@ -929,7 +935,7 @@ function handleStepEvent(data) {
     if (event === 'deal') {
         state.handInProgress = true;
         state.communityCards = [];
-        state.tablePlayers.forEach(p => { p.folded = false; p.cards = []; p.bet = 0; });
+        state.tablePlayers.forEach(p => { p.folded = false; p.allIn = false; p.cards = []; p.bet = 0; });
 
         if (data.playerCards) {
             for (const [pid, cards] of Object.entries(data.playerCards)) {
@@ -1191,23 +1197,28 @@ function updateStatus() {
 function renderStatistics() {
     const statsGrid = document.getElementById('statsGrid');
 
-    if (state.tablePlayers.length === 0) {
-        statsGrid.innerHTML = '<p class="stats-empty">Add players to see statistics</p>';
+    // In spectator mode, show stats for all tracked bots; in custom mode, show table players
+    const statNames = Object.keys(state.statistics);
+    if (statNames.length === 0 && state.tablePlayers.length === 0) {
+        statsGrid.innerHTML = '<p class="stats-empty">Statistics will appear after hands are played</p>';
         drawChipsChart();
         return;
     }
 
-    const rows = state.tablePlayers.map(player => {
-        const stats = state.statistics[player.id];
+    const players = statNames.length > 0 ? statNames : state.tablePlayers.map(p => p.id);
+    const rows = players.map(name => {
+        const stats = state.statistics[name];
         if (!stats) return '';
-        const isEliminated = player.chips <= 0;
+        const tablePlayer = state.tablePlayers.find(p => p.id === name);
+        const chips = tablePlayer ? tablePlayer.chips : '--';
+        const isEliminated = tablePlayer && tablePlayer.chips <= 0 && !tablePlayer.allIn;
         return `
             <tr class="${isEliminated ? 'stats-row-eliminated' : ''}">
-                <td class="stats-cell-name">${player.name}</td>
+                <td class="stats-cell-name">${name}</td>
                 <td>${stats.gamesPlayed}</td>
                 <td>${stats.wins}</td>
                 <td>${stats.winRate}%</td>
-                <td class="stats-cell-chips">${player.chips}</td>
+                <td class="stats-cell-chips">${chips}</td>
                 <td class="stats-cell-won">+${stats.totalChipsWon}</td>
                 <td class="stats-cell-lost">-${stats.totalChipsLost}</td>
             </tr>
@@ -1250,7 +1261,7 @@ function drawChipsChart() {
 
     ctx.clearRect(0, 0, displayWidth, displayHeight);
 
-    if (state.gamesPlayed === 0 || state.tablePlayers.length === 0) {
+    if (state.gamesPlayed === 0 || Object.keys(state.chipHistory).length === 0) {
         ctx.fillStyle = '#666';
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
@@ -1265,8 +1276,9 @@ function drawChipsChart() {
     let maxChips = DEFAULT_STARTING_CHIPS;
     let maxGames = state.gamesPlayed;
 
-    state.tablePlayers.forEach(player => {
-        const history = state.chipHistory[player.id];
+    const chartPlayers = Object.keys(state.chipHistory);
+    chartPlayers.forEach(name => {
+        const history = state.chipHistory[name];
         if (history) history.forEach(point => { maxChips = Math.max(maxChips, point.chips); });
     });
 
@@ -1309,8 +1321,8 @@ function drawChipsChart() {
     // Draw lines for each player
     const colors = ['#4a90e2', '#e24a4a', '#5ac', '#f90', '#9c3', '#c6c', '#fc3', '#6cf', '#f6c'];
 
-    state.tablePlayers.forEach((player, idx) => {
-        const history = state.chipHistory[player.id];
+    chartPlayers.forEach((name, idx) => {
+        const history = state.chipHistory[name];
         if (!history || history.length === 0) return;
 
         ctx.strokeStyle = colors[idx % colors.length];
@@ -1334,7 +1346,7 @@ function drawChipsChart() {
         ctx.fillStyle = '#e0e0e0';
         ctx.font = '11px Arial';
         ctx.textAlign = 'left';
-        ctx.fillText(player.name, legendX + 18, legendY + 4);
+        ctx.fillText(name, legendX + 18, legendY + 4);
     });
 
     ctx.fillStyle = '#4a90e2';
