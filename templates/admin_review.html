@@ -23,9 +23,17 @@
         </div>
     </div>
 
-    <div id="submissionsList" class="submissions-list">
-        <div style="text-align: center; padding: 40px; color: #888;">Loading submissions...</div>
-    </div>
+    <!-- Pending / Revision Requested -->
+    <h2 class="admin-section-title" id="pendingTitle" style="display: none;">Pending Review</h2>
+    <div id="pendingList" class="submissions-list"></div>
+
+    <!-- Approved -->
+    <h2 class="admin-section-title" id="approvedTitle" style="display: none;">Approved Bots</h2>
+    <div id="approvedList" class="submissions-list"></div>
+
+    <!-- Rejected -->
+    <h2 class="admin-section-title" id="rejectedTitle" style="display: none;">Rejected</h2>
+    <div id="rejectedList" class="submissions-list"></div>
 </div>
 {% endblock %}
 
@@ -34,15 +42,18 @@
     let currentSubmissions = [];
 
     async function loadSubmissions() {
-        const container = document.getElementById('submissionsList');
-        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">Loading submissions...</div>';
+        document.getElementById('pendingList').innerHTML =
+            '<div style="text-align: center; padding: 40px; color: #888;">Loading submissions...</div>';
 
         try {
             const response = await fetch('/api/admin/submissions');
             const data = await response.json();
 
             if (!data.success) {
-                showError('Failed to load submissions: ' + (data.error || 'Unknown error'));
+                document.getElementById('pendingList').innerHTML = `
+                    <div class="alert alert-error show">
+                        <strong>Error:</strong> Failed to load submissions: ${data.error || 'Unknown error'}
+                    </div>`;
                 return;
             }
 
@@ -52,37 +63,53 @@
 
         } catch (error) {
             console.error('Error loading submissions:', error);
-            showError('Failed to connect to server. Are you logged in?');
+            document.getElementById('pendingList').innerHTML = `
+                <div class="alert alert-error show">
+                    <strong>Error:</strong> Failed to connect to server. Are you logged in?
+                </div>`;
         }
     }
 
     function updateStats() {
-        document.getElementById('pendingCount').textContent = currentSubmissions.length;
-    }
+        const pending = currentSubmissions.filter(s =>
+            s.status === 'pending_review' || s.status === 'revision_requested'
+        );
+        document.getElementById('pendingCount').textContent = pending.length;
 
-    function showError(message) {
-        const container = document.getElementById('submissionsList');
-        container.innerHTML = `
-            <div class="alert alert-error show">
-                <strong>Error:</strong> ${message}
-            </div>
-        `;
+        const today = new Date().toDateString();
+        const approvedToday = currentSubmissions.filter(s =>
+            s.status === 'approved' && s.approval_date &&
+            new Date(s.approval_date).toDateString() === today
+        ).length;
+        document.getElementById('approvedToday').textContent = approvedToday;
     }
 
     function renderSubmissions() {
-        const container = document.getElementById('submissionsList');
+        const pending = currentSubmissions.filter(s =>
+            s.status === 'pending_review' || s.status === 'revision_requested'
+        );
+        const approved = currentSubmissions.filter(s => s.status === 'approved');
+        const rejected = currentSubmissions.filter(s => s.status === 'rejected');
 
-        if (currentSubmissions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <h3>All caught up!</h3>
-                    <p>No pending bot submissions to review</p>
-                </div>
-            `;
+        renderSection('pending', pending, 'All caught up! No pending submissions.');
+        renderSection('approved', approved, 'No approved bots yet.');
+        renderSection('rejected', rejected, null);
+    }
+
+    function renderSection(key, subs, emptyMessage) {
+        const title = document.getElementById(key + 'Title');
+        const container = document.getElementById(key + 'List');
+
+        if (subs.length === 0) {
+            title.style.display = 'none';
+            container.innerHTML = emptyMessage
+                ? `<div class="empty-state"><p>${emptyMessage}</p></div>`
+                : '';
             return;
         }
 
-        container.innerHTML = currentSubmissions.map(sub => {
+        title.style.display = 'block';
+        container.innerHTML = subs.map(sub => {
             const statusClass = {
                 'pending_review': 'pending',
                 'approved': 'approved',
