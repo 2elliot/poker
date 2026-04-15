@@ -335,6 +335,36 @@ def get_available_bots():
         }), 500
 
 
+@app.route('/api/bots/my-pending', methods=['GET'])
+@login_required
+def get_my_pending_bots():
+    """Get current user's pending bots that can be tested in custom table"""
+    try:
+        with review_system._lock:
+            review_system.submissions = review_system._load_submissions()
+            pending = []
+            for sub_id, sub in review_system.submissions["submissions"].items():
+                owner = sub.get("submitter_username", sub.get("submitter_email"))
+                if owner != current_user.username:
+                    continue
+                if sub["status"] != "pending_review":
+                    continue
+                code_file = sub.get("code_file")
+                if not code_file or not os.path.exists(code_file):
+                    continue
+                pending.append({
+                    'id': f'pending:{sub_id}',
+                    'name': sub["bot_name"],
+                    'submission_id': sub_id,
+                    'type': 'pending',
+                    'creator': current_user.username,
+                })
+        return jsonify({'success': True, 'bots': pending})
+    except Exception as e:
+        logging.error(f"Error getting pending bots: {e}")
+        return jsonify({'success': False, 'error': 'Failed to load pending bots'}), 500
+
+
 @app.route('/api/bots/submit', methods=['POST'])
 @login_required
 def submit_bot():
@@ -861,24 +891,50 @@ def initialize_tournament():
             if not bot_name:
                 continue
 
-            if MASTER_PASSWORD is None:
-                continue
-            bot_instance = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
-            if bot_instance is None:
-                continue
+            # Handle pending bots (format: "pending:<submission_id>")
+            if bot_name.startswith('pending:'):
+                sub_id = bot_name.split(':', 1)[1]
+                sub = review_system.submissions.get("submissions", {}).get(sub_id)
+                if not sub or sub["status"] != "pending_review":
+                    continue
+                code_file = sub.get("code_file")
+                if not code_file or not os.path.exists(code_file):
+                    continue
+                with open(code_file, 'r', encoding='utf-8') as f:
+                    code = f.read()
+                validation = review_system._validate_bot_code(code, sub["bot_name"])
+                if not validation.get("valid"):
+                    continue
+                # Load bot from source code
+                bot_instance = bot_storage._load_bot_from_string(code, sub["bot_name"])
+                if bot_instance is None:
+                    continue
+                actual_name = sub["bot_name"]
+            else:
+                if MASTER_PASSWORD is None:
+                    continue
+                bot_instance = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
+                if bot_instance is None:
+                    continue
+                actual_name = bot_name
 
-            if bot_name not in bot_count:
-                bot_count[bot_name] = 0
-            bot_count[bot_name] += 1
+            if actual_name not in bot_count:
+                bot_count[actual_name] = 0
+            bot_count[actual_name] += 1
 
-            if bot_count[bot_name] > 1:
-                player_name = f"{bot_name}_{bot_count[bot_name]}"
-                unique_bot = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
+            if bot_count[actual_name] > 1:
+                player_name = f"{actual_name}_{bot_count[actual_name]}"
+                # Re-load for unique instance
+                if bot_name.startswith('pending:'):
+                    with open(code_file, 'r', encoding='utf-8') as f:
+                        unique_bot = bot_storage._load_bot_from_string(f.read(), actual_name)
+                else:
+                    unique_bot = bot_storage.load_bot(bot_name, MASTER_PASSWORD)
                 if unique_bot is None:
                     continue
                 unique_bot.name = player_name
             else:
-                player_name = bot_name
+                player_name = actual_name
                 unique_bot = bot_instance
 
             player_names.append(player_name)

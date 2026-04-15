@@ -248,7 +248,10 @@ class MyBot(PokerBotAPI):
                         <button class="btn btn-danger" onclick="withdrawBot('${sub.submission_id}')">Withdraw</button>
                     `;
                 } else if (sub.status === 'pending_review') {
-                    actionsHtml = `<button class="btn btn-danger" onclick="withdrawBot('${sub.submission_id}')">Withdraw</button>`;
+                    actionsHtml = `
+                        <a href="/" class="btn btn-secondary" style="text-decoration:none;">Test in Custom Table</a>
+                        <button class="btn btn-danger" onclick="withdrawBot('${sub.submission_id}')">Withdraw</button>
+                    `;
                 } else if (sub.status === 'rejected') {
                     actionsHtml = `<button class="btn btn-secondary" onclick="dismissBot('${sub.submission_id}')">Dismiss</button>`;
                 }

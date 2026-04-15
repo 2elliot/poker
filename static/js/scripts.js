@@ -564,6 +564,20 @@ async function loadAvailableBots() {
 
         if (data.success) {
             state.availableBots = data.bots;
+
+            // Also fetch the current user's pending bots for custom table testing
+            try {
+                const pendingRes = await fetch(`${API_BASE_URL}/bots/my-pending`);
+                const pendingData = await pendingRes.json();
+                if (pendingData.success && pendingData.bots.length > 0) {
+                    for (const bot of pendingData.bots) {
+                        state.availableBots.push(bot);
+                    }
+                }
+            } catch (e) {
+                // Not logged in or endpoint unavailable — silently ignore
+            }
+
             renderBotList();
             logToConsole(`Loaded ${data.bots.length} bots from backend`, 'event-action');
         } else {
@@ -617,12 +631,27 @@ function getLogClassName(logEntry) {
 // Render bot list
 function renderBotList() {
     const botList = document.getElementById('botList');
-    botList.innerHTML = state.availableBots.map(bot => `
+    const approved = state.availableBots.filter(b => b.type !== 'pending');
+    const pending = state.availableBots.filter(b => b.type === 'pending');
+
+    let html = approved.map(bot => `
         <div class="bot-item" onclick="addBotToTable('${bot.id}')">
             <div class="bot-name">${bot.name}</div>
             <div class="bot-type">${bot.creator ? 'by ' + bot.creator : bot.type}</div>
         </div>
     `).join('');
+
+    if (pending.length > 0) {
+        html += '<div class="bot-list-divider">Your Pending Bots — Test Here</div>';
+        html += pending.map(bot => `
+            <div class="bot-item bot-item-pending" onclick="addBotToTable('${bot.id}')">
+                <div class="bot-name">${bot.name}</div>
+                <div class="bot-type bot-type-pending">Pending — click to test</div>
+            </div>
+        `).join('');
+    }
+
+    botList.innerHTML = html;
 }
 
 // Add bot to table
