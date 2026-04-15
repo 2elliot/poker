@@ -65,6 +65,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/bot-profile.js"></script>
 <script>
     let allBots = [];
 
@@ -215,47 +216,10 @@
             const mbbClass = s.mbb_per_hand > 0 ? 'stats-cell-won' : s.mbb_per_hand < 0 ? 'stats-cell-lost' : '';
             const netClass = s.net_chips >= 0 ? 'stats-cell-won' : 'stats-cell-lost';
 
-            content.innerHTML = `
-                <div class="bot-profile">
-                    <div class="bot-profile-header">
-                        <h2>${s.name}</h2>
-                        <span class="bot-profile-creator">by ${s.creator || 'unknown'}</span>
-                        ${style ? `<span class="lb-style-tag ${getStyleClass(style)}" style="margin-left: 10px;">${getStyleFullName(style)}</span>` : ''}
-                    </div>
-
-                    <div class="bot-profile-grid">
-                        <div class="bot-stat-card">
-                            <div class="bot-stat-value lb-elo">${Math.round(s.elo)}</div>
-                            <div class="bot-stat-label">Elo Rating</div>
-                        </div>
-                        <div class="bot-stat-card">
-                            <div class="bot-stat-value ${mbbClass}">${mbb}</div>
-                            <div class="bot-stat-label">mbb/hand</div>
-                        </div>
-                        <div class="bot-stat-card">
-                            <div class="bot-stat-value">${s.win_rate}%</div>
-                            <div class="bot-stat-label">Win Rate</div>
-                        </div>
-                        <div class="bot-stat-card">
-                            <div class="bot-stat-value">${s.hands_played.toLocaleString()}</div>
-                            <div class="bot-stat-label">Hands Played</div>
-                        </div>
-                    </div>
-
-                    <div class="bot-profile-details">
-                        <table class="bot-detail-table">
-                            <tr><td>Hands Won</td><td>${s.hands_won.toLocaleString()}</td></tr>
-                            <tr><td>Tournaments</td><td>${s.tournaments_won}W / ${s.tournaments_played}P</td></tr>
-                            <tr><td>Chips Won</td><td class="stats-cell-won">+${s.chips_won.toLocaleString()}</td></tr>
-                            <tr><td>Chips Lost</td><td class="stats-cell-lost">-${s.chips_lost.toLocaleString()}</td></tr>
-                            <tr><td>Net Chips</td><td class="${netClass}">${s.net_chips >= 0 ? '+' : ''}${s.net_chips.toLocaleString()}</td></tr>
-                            <tr><td>VPIP</td><td>${s.vpip}%</td></tr>
-                            <tr><td>PFR</td><td>${s.pfr}%</td></tr>
-                            <tr><td>Calibrated</td><td>${s.calibrated ? 'Yes' : 'No (< 5,000 hands)'}</td></tr>
-                        </table>
-                    </div>
-                </div>
-            `;
+            content.innerHTML = renderBotProfileHTML(s, style, mbb, mbbClass, netClass);
+            if (s.elo_history && s.elo_history.length > 1) {
+                drawEloChart(document.getElementById('eloChartCanvas'), s.elo_history);
+            }
         } catch (error) {
             content.innerHTML = '<div class="alert alert-error show">Failed to load bot stats</div>';
         }

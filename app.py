@@ -392,6 +392,21 @@ def resubmit_bot(submission_id):
         if not new_code:
             return jsonify({'success': False, 'error': 'Bot code is required'}), 400
 
+        # Check if this is an approved bot being updated — if so, snapshot
+        # its stats, pull it from active play, and reset so the old version
+        # doesn't keep competing
+        with review_system._lock:
+            review_system.submissions = review_system._load_submissions()
+            sub = review_system.submissions["submissions"].get(submission_id)
+            if sub and sub["status"] == "approved":
+                bot_name = sub["bot_name"]
+                # Save current stats as previous_version before resetting
+                match_scheduler.snapshot_bot_version(bot_name)
+                if bot_name in bot_storage.metadata.get("bots", {}):
+                    bot_storage.delete_bot(bot_name, MASTER_PASSWORD)
+                match_scheduler.delete_bot_stats(bot_name, preserve_version=True)
+                logging.info(f"Bot '{bot_name}' removed from active play for resubmission")
+
         result = review_system.resubmit_bot(submission_id, new_code, current_user.username)
         return jsonify(result)
 

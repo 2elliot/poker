@@ -1823,6 +1823,75 @@ body.page-login {
     font-weight: 500;
 }
 
+/* Elo History Chart */
+.elo-chart-container {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 20px;
+}
+
+.elo-chart-container canvas {
+    display: block;
+    width: 100%;
+}
+
+/* Version Comparison */
+.version-comparison {
+    background: #1e2a1e;
+    border: 1px solid #2a4a2a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+}
+
+.version-comparison-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #7ac47a;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.version-comparison-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.version-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.version-stat-label {
+    color: #888;
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.version-stat-old {
+    color: #999;
+}
+
+.version-stat-arrow {
+    color: #555;
+}
+
+.version-stat-new {
+    color: #e0e0e0;
+    font-weight: 600;
+}
+
+.version-stat-diff {
+    font-weight: 600;
+    margin-left: auto;
+}
+
 /* =============================================
    Hamburger Menu (mobile)
    ============================================= */

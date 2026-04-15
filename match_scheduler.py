@@ -82,8 +82,19 @@ class MatchScheduler:
                 "vpip_hands": 0,        # voluntarily put $ in pot
                 "pfr_hands": 0,         # pre-flop raise
                 "total_preflop_hands": 0,
-                "last_played": None
+                "last_played": None,
+                "elo_history": [],       # [{elo, match, timestamp}, ...]
+                "previous_version": None # snapshot of stats before last code update
             }
+        # Backfill for bots created before elo_history existed
+        if "elo_history" not in self.stats["bots"][name]:
+            self.stats["bots"][name]["elo_history"] = []
+        if "previous_version" not in self.stats["bots"][name]:
+            self.stats["bots"][name]["previous_version"] = None
+        # Restore previous_version from stash if this bot was just re-created
+        stash = getattr(self, '_version_stash', {})
+        if name in stash:
+            self.stats["bots"][name]["previous_version"] = stash.pop(name)
 
     # ------------------------------------------------------------------
     # Elo helpers
@@ -465,8 +476,20 @@ class MatchScheduler:
         results = tournament.get_final_results()
         self._elo_update_match(results)
 
+        # Record Elo snapshot after this match
+        match_num = self.stats.get("match_count", 0) + 1
+        ts = datetime.now().isoformat()
         for name, chips, position in results:
             b = self.stats["bots"][name]
+            b["elo_history"].append({
+                "elo": b["elo"],
+                "match": match_num,
+                "ts": ts,
+            })
+            # Cap history length to avoid unbounded growth
+            if len(b["elo_history"]) > 500:
+                b["elo_history"] = b["elo_history"][-500:]
+
             b["tournaments_played"] += 1
             if position == 1:
                 b["tournaments_won"] += 1
@@ -632,12 +655,35 @@ class MatchScheduler:
         self._pending_reset = False
         self.logger.info("All leaderboard stats have been reset")
 
-    def delete_bot_stats(self, bot_name: str):
-        """Remove a single bot from the stats."""
+    def delete_bot_stats(self, bot_name: str, preserve_version: bool = False):
+        """Remove a single bot from the stats.
+        If preserve_version is True, keep previous_version so the new entry
+        can show the comparison after re-approval."""
         with self._lock:
-            self.stats["bots"].pop(bot_name, None)
+            old = self.stats["bots"].pop(bot_name, None)
+            if preserve_version and old and old.get("previous_version"):
+                # Stash it so _ensure_bot_entry can pick it up
+                self._version_stash = getattr(self, '_version_stash', {})
+                self._version_stash[bot_name] = old["previous_version"]
             self._write_stats_to_disk()
         self.logger.info(f"Stats deleted for bot: {bot_name}")
+
+    def snapshot_bot_version(self, bot_name: str):
+        """Save current stats as previous_version before a code update resets them."""
+        data = self.stats["bots"].get(bot_name)
+        if not data:
+            return
+        hp = data["hands_played"]
+        data["previous_version"] = {
+            "elo": data["elo"],
+            "win_rate": round(data["hands_won"] / hp * 100, 1) if hp > 0 else 0,
+            "tournaments_played": data["tournaments_played"],
+            "tournaments_won": data["tournaments_won"],
+            "hands_played": hp,
+            "date": datetime.now().isoformat(),
+        }
+        self._save_stats()
+        self.logger.info(f"Version snapshot saved for bot: {bot_name}")
 
     def get_bot_stats(self, bot_name: str) -> Optional[Dict]:
         """Get detailed stats for a single bot."""
@@ -661,4 +707,6 @@ class MatchScheduler:
             "chips_lost": data["chips_lost"],
             "net_chips": data["chips_won"] - data["chips_lost"],
             "calibrated": hp >= 5000,
+            "elo_history": data.get("elo_history", []),
+            "previous_version": data.get("previous_version"),
         }
