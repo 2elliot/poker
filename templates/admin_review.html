@@ -126,110 +126,131 @@
 
             const isPending = sub.status === 'pending_review' || sub.status === 'revision_requested';
 
+            // Brief summary line for the collapsed header
+            const safetyTag = sub.safety_check && sub.safety_check.severity !== 'safe'
+                ? `<span class="severity-badge severity-${sub.safety_check.severity}">${sub.safety_check.severity.toUpperCase()}</span>`
+                : '';
+
+            const statsSnippet = sub.status === 'approved' && sub.bot_stats
+                ? `<span class="submission-summary-stat">Elo ${Math.round(sub.bot_stats.elo)}</span>
+                   <span class="submission-summary-stat">${sub.bot_stats.tournaments_played} matches</span>`
+                : '';
+
             return `
-            <div class="submission-card">
-                <div class="submission-header">
-                    <div>
-                        <h3 style="color: #fff; margin-bottom: 8px;">${escapeHtml(sub.bot_name)}</h3>
-                        <div class="submission-meta">
-                            <span>by <strong>${escapeHtml(sub.submitter_username || 'unknown')}</strong></span>
-                            <span>${new Date(sub.submission_date).toLocaleString()}</span>
-                            ${sub.code_lines ? `<span>${sub.code_lines} lines</span>` : ''}
-                            ${sub.revision_count > 0 ? `<span>Rev. ${sub.revision_count}</span>` : ''}
-                        </div>
+            <div class="submission-card collapsed" id="card-${sub.submission_id}">
+                <div class="submission-header" onclick="toggleCard('${sub.submission_id}')">
+                    <div class="submission-header-left">
+                        <span class="submission-expand-icon">&#9654;</span>
+                        <h3>${escapeHtml(sub.bot_name)}</h3>
+                        <span class="submission-meta-inline">by ${escapeHtml(sub.submitter_username || 'unknown')}</span>
+                        ${statsSnippet}
+                        ${safetyTag}
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span class="status-badge status-${statusClass}">${statusText}</span>
-                        <button class="btn btn-danger" onclick="deleteBot('${escapeHtml(sub.bot_name)}')" style="font-size: 11px; padding: 4px 10px;">Delete</button>
+                        <button class="btn btn-danger" onclick="event.stopPropagation(); deleteBot('${escapeHtml(sub.bot_name)}')" style="font-size: 11px; padding: 4px 10px;">Delete</button>
                     </div>
                 </div>
 
-                ${sub.status === 'approved' && sub.bot_stats ? `
-                <div class="admin-bot-stats">
-                    <span title="Elo Rating">Elo: <strong>${Math.round(sub.bot_stats.elo)}</strong></span>
-                    <span title="Hands Played">Hands: <strong>${sub.bot_stats.hands_played.toLocaleString()}</strong></span>
-                    <span title="Win Rate">WR: <strong>${sub.bot_stats.win_rate}%</strong></span>
-                    <span title="Tournaments Won/Played">Tournaments: <strong>${sub.bot_stats.tournaments_won}W/${sub.bot_stats.tournaments_played}P</strong></span>
-                </div>
-                ` : ''}
-
-                ${sub.review_notes && sub.review_notes.length > 0 ? `
-                    <div class="review-notes" style="margin-bottom: 15px;">
-                        <strong style="color: #4a90e2;">Review Notes</strong>
-                        ${sub.review_notes.map(note => `
-                            <div class="review-note">
-                                <div class="review-note-date">${new Date(note.date).toLocaleString()}</div>
-                                <div>${escapeHtml(note.action)}: ${escapeHtml(note.notes)}</div>
-                            </div>
-                        `).join('')}
+                <div class="submission-body">
+                    <div class="submission-meta">
+                        <span>Submitted: ${new Date(sub.submission_date).toLocaleString()}</span>
+                        ${sub.code_lines ? `<span>${sub.code_lines} lines</span>` : ''}
+                        ${sub.revision_count > 0 ? `<span>Rev. ${sub.revision_count}</span>` : ''}
                     </div>
-                ` : ''}
 
-                ${sub.safety_check ? `
-                <div class="safety-check">
-                    <div class="safety-header">
-                        <strong>Automated Safety Check</strong>
-                        <span class="severity-badge severity-${sub.safety_check.severity}">
-                            ${sub.safety_check.severity.toUpperCase()}
+                    ${sub.status === 'approved' && sub.bot_stats ? `
+                    <div class="admin-bot-stats">
+                        <span title="Elo Rating">Elo: <strong>${Math.round(sub.bot_stats.elo)}</strong></span>
+                        <span title="Hands Played">Hands: <strong>${sub.bot_stats.hands_played.toLocaleString()}</strong></span>
+                        <span title="Win Rate">WR: <strong>${sub.bot_stats.win_rate}%</strong></span>
+                        <span title="Tournaments Won/Played">Tournaments: <strong>${sub.bot_stats.tournaments_won}W/${sub.bot_stats.tournaments_played}P</strong></span>
+                    </div>
+                    ` : ''}
+
+                    ${sub.review_notes && sub.review_notes.length > 0 ? `
+                        <div class="review-notes" style="margin-bottom: 15px;">
+                            <strong style="color: #4a90e2;">Review Notes</strong>
+                            ${sub.review_notes.map(note => `
+                                <div class="review-note">
+                                    <div class="review-note-date">${new Date(note.date).toLocaleString()}</div>
+                                    <div>${escapeHtml(note.action)}: ${escapeHtml(note.notes)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    ${sub.safety_check ? `
+                    <div class="safety-check">
+                        <div class="safety-header">
+                            <strong>Automated Safety Check</strong>
+                            <span class="severity-badge severity-${sub.safety_check.severity}">
+                                ${sub.safety_check.severity.toUpperCase()}
+                            </span>
+                        </div>
+                        ${sub.safety_check.total_flags > 0 ? `
+                            <ul class="flags-list">
+                                ${sub.safety_check.flags.map(flag => `
+                                    <li class="flag-item flag-${flag.severity}">
+                                        <span>
+                                            <strong>${escapeHtml(flag.pattern)}</strong> - ${escapeHtml(flag.description)}
+                                        </span>
+                                        <span class="severity-badge severity-${flag.severity}">
+                                            ${flag.severity}
+                                        </span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        ` : '<p style="color: #5cb85c;">No issues detected</p>'}
+                    </div>
+                    ` : ''}
+
+                    ${sub.code ? `
+                    <div class="code-header">
+                        <strong>Bot Code</strong>
+                        <span class="toggle-code" onclick="event.stopPropagation(); toggleCode('${sub.submission_id}')">
+                            Expand/Collapse
                         </span>
                     </div>
-                    ${sub.safety_check.total_flags > 0 ? `
-                        <ul class="flags-list">
-                            ${sub.safety_check.flags.map(flag => `
-                                <li class="flag-item flag-${flag.severity}">
-                                    <span>
-                                        <strong>${escapeHtml(flag.pattern)}</strong> - ${escapeHtml(flag.description)}
-                                    </span>
-                                    <span class="severity-badge severity-${flag.severity}">
-                                        ${flag.severity}
-                                    </span>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    ` : '<p style="color: #5cb85c;">No issues detected</p>'}
-                </div>
-                ` : ''}
+                    <div class="code-preview collapsed" id="code-${sub.submission_id}">
+                        <pre>${escapeHtml(sub.code)}</pre>
+                    </div>
+                    ` : ''}
 
-                ${sub.code ? `
-                <div class="code-header">
-                    <strong>Bot Code</strong>
-                    <span class="toggle-code" onclick="toggleCode('${sub.submission_id}')">
-                        Expand/Collapse
-                    </span>
-                </div>
-                <div class="code-preview collapsed" id="code-${sub.submission_id}">
-                    <pre>${escapeHtml(sub.code)}</pre>
-                </div>
-                ` : ''}
-
-                ${isPending ? `
-                <div class="actions">
-                    <button class="btn btn-success" onclick="approveBot('${sub.submission_id}')">
-                        Approve
-                    </button>
-                    <button class="btn btn-warning" onclick="toggleFeedback('${sub.submission_id}', 'revision')">
-                        Request Revision
-                    </button>
-                    <button class="btn btn-danger" onclick="toggleFeedback('${sub.submission_id}', 'reject')">
-                        Reject
-                    </button>
-                </div>
-
-                <div class="feedback-form" id="feedback-${sub.submission_id}">
-                    <textarea id="feedback-text-${sub.submission_id}"
-                              placeholder="Enter your feedback or reason..."></textarea>
-                    <div class="form-actions">
-                        <button class="btn" onclick="submitFeedback('${sub.submission_id}')">
-                            Submit
+                    ${isPending ? `
+                    <div class="actions">
+                        <button class="btn btn-success" onclick="approveBot('${sub.submission_id}')">
+                            Approve
                         </button>
-                        <button class="btn btn-secondary" onclick="toggleFeedback('${sub.submission_id}')">
-                            Cancel
+                        <button class="btn btn-warning" onclick="toggleFeedback('${sub.submission_id}', 'revision')">
+                            Request Revision
+                        </button>
+                        <button class="btn btn-danger" onclick="toggleFeedback('${sub.submission_id}', 'reject')">
+                            Reject
                         </button>
                     </div>
+
+                    <div class="feedback-form" id="feedback-${sub.submission_id}">
+                        <textarea id="feedback-text-${sub.submission_id}"
+                                  placeholder="Enter your feedback or reason..."></textarea>
+                        <div class="form-actions">
+                            <button class="btn" onclick="submitFeedback('${sub.submission_id}')">
+                                Submit
+                            </button>
+                            <button class="btn btn-secondary" onclick="toggleFeedback('${sub.submission_id}')">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
-                ` : ''}
             </div>
         `}).join('');
+    }
+
+    function toggleCard(submissionId) {
+        const card = document.getElementById(`card-${submissionId}`);
+        card.classList.toggle('collapsed');
     }
 
     function toggleCode(submissionId) {

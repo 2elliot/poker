@@ -1166,8 +1166,7 @@ body.page-tournament {
     background: #2a2a2a;
     border: 2px solid #333;
     border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 15px;
+    margin-bottom: 8px;
     transition: border-color 0.2s;
 }
 
@@ -1179,7 +1178,54 @@ body.page-tournament {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.submission-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.submission-header-left h3 {
+    color: #fff;
+    font-size: 15px;
+    margin: 0;
+}
+
+.submission-expand-icon {
+    color: #888;
+    font-size: 11px;
+    transition: transform 0.2s;
+    display: inline-block;
+}
+
+.submission-card:not(.collapsed) .submission-expand-icon {
+    transform: rotate(90deg);
+}
+
+.submission-meta-inline {
+    color: #888;
+    font-size: 13px;
+}
+
+.submission-summary-stat {
+    color: #aaa;
+    font-size: 12px;
+    background: #1a1a1a;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.submission-body {
+    padding: 0 16px 16px;
+}
+
+.submission-card.collapsed .submission-body {
+    display: none;
 }
 
 .submission-name {
@@ -1193,7 +1239,7 @@ body.page-tournament {
     gap: 20px;
     color: #888;
     font-size: 13px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 .admin-bot-stats {
@@ -1893,14 +1939,12 @@ body.page-login {
    Transitions & Hover Improvements
    ============================================= */
 
-.submission-card,
 .panel-card,
 .bot-item,
 .bot-stat-card {
     transition: transform 0.15s, box-shadow 0.15s;
 }
 
-.submission-card:hover,
 .panel-card:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
