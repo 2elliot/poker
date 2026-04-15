@@ -194,6 +194,30 @@ class SecureBotStorage:
             # Decryption failed (wrong password) or invalid code
             return None
     
+    def get_bot_code(self, bot_name: str, password: str) -> Optional[str]:
+        """Decrypt and return bot source code as a string."""
+        if bot_name not in self.metadata["bots"]:
+            return None
+
+        bot_id = self.metadata["bots"][bot_name]["bot_id"]
+        bot_file = os.path.join(self.storage_directory, f"{bot_id}.enc")
+        salt_file = os.path.join(self.storage_directory, f"{bot_id}.salt")
+
+        if not os.path.exists(bot_file) or not os.path.exists(salt_file):
+            return None
+
+        with open(salt_file, 'rb') as f:
+            salt = f.read()
+        with open(bot_file, 'rb') as f:
+            encrypted_code = f.read()
+
+        try:
+            encryption_key = self._generate_encryption_key(password, salt)
+            f = Fernet(encryption_key)
+            return f.decrypt(encrypted_code).decode()
+        except Exception:
+            return None
+
     def _load_bot_from_string(self, code: str, bot_name: str) -> Optional[PokerBotAPI]:
         """Load bot from code string without writing to disk"""
         try:

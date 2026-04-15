@@ -464,12 +464,21 @@ class BotReviewSystem:
                 from secure_bot_storage import SecureBotStorage
                 storage = SecureBotStorage(self.approved_directory)
 
-                result = storage.upload_bot(
-                    submission["bot_name"],
-                    bot_code,
-                    master_password
-                )
-                
+                # Use update if bot already exists in storage (resubmission),
+                # otherwise upload as new
+                if submission["bot_name"] in storage.metadata.get("bots", {}):
+                    result = storage.update_bot(
+                        submission["bot_name"],
+                        bot_code,
+                        master_password
+                    )
+                else:
+                    result = storage.upload_bot(
+                        submission["bot_name"],
+                        bot_code,
+                        master_password
+                    )
+
                 if not result["success"]:
                     self.logger.error(f"Failed to upload bot to storage: {result.get('error')}")
                     return result

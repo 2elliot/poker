@@ -238,7 +238,10 @@ class MyBot(PokerBotAPI):
 
                 let actionsHtml = '';
                 if (sub.status === 'approved') {
-                    actionsHtml = `<button class="btn btn-secondary" onclick="openUpdate('${sub.submission_id}', '${sub.bot_name}')">Update Code</button>`;
+                    actionsHtml = `
+                        <button class="btn btn-secondary" onclick="openUpdate('${sub.submission_id}', '${sub.bot_name}')">Update Code</button>
+                        <button class="btn btn-danger" onclick="deleteBot('${sub.submission_id}', '${sub.bot_name}')">Delete Bot</button>
+                    `;
                 } else if (sub.status === 'revision_requested') {
                     actionsHtml = `
                         <button class="btn" onclick="openUpdate('${sub.submission_id}', '${sub.bot_name}')">Update Code</button>
@@ -324,11 +327,22 @@ class MyBot(PokerBotAPI):
         }
     }
 
-    function openUpdate(submissionId, botName) {
+    async function openUpdate(submissionId, botName) {
         updateSubmissionId = submissionId;
         document.getElementById('updateBotName').textContent = botName;
         document.getElementById('updateCode').value = '';
         document.getElementById('updateModal').style.display = 'flex';
+
+        // Fetch current code so user can edit it
+        try {
+            const response = await fetch(`/api/bots/code/${submissionId}`);
+            const data = await response.json();
+            if (data.success && data.code) {
+                document.getElementById('updateCode').value = data.code;
+            }
+        } catch (e) {
+            // Silently fail — user can still paste new code
+        }
     }
 
     function closeUpdateModal() {
@@ -376,6 +390,26 @@ class MyBot(PokerBotAPI):
                 loadMyBots();
             } else {
                 showToast(data.error || 'Withdrawal failed', 'error');
+            }
+        } catch (error) {
+            showToast('Connection error', 'error');
+        }
+    }
+
+    async function deleteBot(submissionId, botName) {
+        if (!confirm(`Are you sure you want to permanently delete "${botName}"? This will remove it from tournaments and all its stats.`)) return;
+
+        try {
+            const response = await fetch(`/api/bots/delete/${submissionId}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Bot deleted', 'success');
+                loadMyBots();
+            } else {
+                showToast(data.error || 'Deletion failed', 'error');
             }
         } catch (error) {
             showToast('Connection error', 'error');

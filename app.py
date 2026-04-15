@@ -412,6 +412,81 @@ def withdraw_bot(submission_id):
         return jsonify({'success': False, 'error': 'Withdrawal failed'}), 500
 
 
+@app.route('/api/bots/code/<submission_id>', methods=['GET'])
+@login_required
+def get_bot_code(submission_id):
+    """Get the current code for a user's bot (owner only)"""
+    try:
+        with review_system._lock:
+            review_system.submissions = review_system._load_submissions()
+            if submission_id not in review_system.submissions["submissions"]:
+                return jsonify({'success': False, 'error': 'Submission not found'}), 404
+
+            sub = review_system.submissions["submissions"][submission_id]
+            owner = sub.get("submitter_username", sub.get("submitter_email"))
+            if owner != current_user.username:
+                return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+            bot_name = sub["bot_name"]
+
+        # If there's a pending review file, return that
+        code_file = sub.get("code_file")
+        if code_file and os.path.exists(code_file):
+            with open(code_file, 'r', encoding='utf-8') as f:
+                return jsonify({'success': True, 'code': f.read()})
+
+        # Otherwise decrypt from storage (approved bot)
+        code = bot_storage.get_bot_code(bot_name, MASTER_PASSWORD)
+        if code is not None:
+            return jsonify({'success': True, 'code': code})
+
+        return jsonify({'success': False, 'error': 'Bot code not available'}), 404
+
+    except Exception as e:
+        logging.error(f"Error getting bot code: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to load code'}), 500
+
+
+@app.route('/api/bots/delete/<submission_id>', methods=['POST'])
+@login_required
+def user_delete_bot(submission_id):
+    """User deletes their own bot (removes from storage, submissions, and stats)"""
+    try:
+        with review_system._lock:
+            review_system.submissions = review_system._load_submissions()
+            if submission_id not in review_system.submissions["submissions"]:
+                return jsonify({'success': False, 'error': 'Submission not found'}), 404
+
+            sub = review_system.submissions["submissions"][submission_id]
+            owner = sub.get("submitter_username", sub.get("submitter_email"))
+            if owner != current_user.username:
+                return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+            bot_name = sub["bot_name"]
+
+            # Delete from encrypted storage if it was approved
+            if bot_name in bot_storage.metadata.get("bots", {}):
+                bot_storage.delete_bot(bot_name, MASTER_PASSWORD)
+
+            # Remove from approved_bots
+            review_system.submissions["approved_bots"].pop(bot_name, None)
+
+            # Clean up code file and remove submission
+            review_system._cleanup_submission_files(submission_id)
+            del review_system.submissions["submissions"][submission_id]
+            review_system._save_submissions()
+
+        # Remove from match stats
+        match_scheduler.delete_bot_stats(bot_name)
+
+        logging.info(f"Bot '{bot_name}' deleted by owner {current_user.username}")
+        return jsonify({'success': True, 'message': f"Bot '{bot_name}' deleted"})
+
+    except Exception as e:
+        logging.error(f"Error deleting bot: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to delete bot'}), 500
+
+
 # ============================================================================
 # AUTHENTICATION ROUTES
 # ============================================================================
