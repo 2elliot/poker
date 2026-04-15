@@ -634,12 +634,7 @@ function renderBotList() {
     const approved = state.availableBots.filter(b => b.type !== 'pending');
     const pending = state.availableBots.filter(b => b.type === 'pending');
 
-    let html = approved.map(bot => `
-        <div class="bot-item" onclick="addBotToTable('${bot.id}')">
-            <div class="bot-name">${bot.name}</div>
-            <div class="bot-type">${bot.creator ? 'by ' + bot.creator : bot.type}</div>
-        </div>
-    `).join('');
+    let html = '';
 
     if (pending.length > 0) {
         html += '<div class="bot-list-divider">Your Pending Bots — Test Here</div>';
@@ -650,6 +645,13 @@ function renderBotList() {
             </div>
         `).join('');
     }
+
+    html += approved.map(bot => `
+        <div class="bot-item" onclick="addBotToTable('${bot.id}')">
+            <div class="bot-name">${bot.name}</div>
+            <div class="bot-type">${bot.creator ? 'by ' + bot.creator : bot.type}</div>
+        </div>
+    `).join('');
 
     botList.innerHTML = html;
 }
