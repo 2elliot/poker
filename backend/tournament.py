@@ -368,10 +368,12 @@ class PokerTournament:
     def advance_hand(self):
         """Advance to the next hand"""
         self.current_hand += 1
-        
+
         # Increase blinds if necessary
         for table in self.tables.values():
             table.hands_played += 1
+            if table.should_increase_blinds():
+                table.increase_blinds()
     
     def is_tournament_complete(self) -> bool:
         """Check if tournament is complete"""

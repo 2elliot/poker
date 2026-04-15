@@ -106,17 +106,29 @@ class MatchScheduler:
         """
         Update Elo ratings once per match based on final placement.
         results: [(name, chips, position), ...] sorted by position (1 = winner).
-        Each pair is compared; the higher-placed bot 'wins'.
+
+        Uses a snapshot of ratings so pair ordering doesn't affect results,
+        and divides K by (N-1) so the total Elo swing per match stays bounded
+        regardless of table size.
         """
-        for i in range(len(results)):
-            for j in range(i + 1, len(results)):
+        n = len(results)
+        if n < 2:
+            return
+
+        # Snapshot current ratings so all pairs use the same starting values
+        elo_snap = {r[0]: self.stats["bots"][r[0]]["elo"] for r in results}
+        # Accumulate deltas separately, apply once at the end
+        deltas = {r[0]: 0.0 for r in results}
+
+        for i in range(n):
+            for j in range(i + 1, n):
                 a = results[i][0]
                 b = results[j][0]
                 pos_a = results[i][2]
                 pos_b = results[j][2]
 
-                ra = self.stats["bots"][a]["elo"]
-                rb = self.stats["bots"][b]["elo"]
+                ra = elo_snap[a]
+                rb = elo_snap[b]
                 ea = self._elo_expected(ra, rb)
                 eb = 1 - ea
 
@@ -127,11 +139,15 @@ class MatchScheduler:
                 else:
                     sa, sb = 0.5, 0.5
 
-                # Use the average K of both bots so the update is symmetric
-                k = (self._get_k_factor(a) + self._get_k_factor(b)) / 2
+                # Divide K by (N-1) so total movement ≈ K regardless of table size
+                k = (self._get_k_factor(a) + self._get_k_factor(b)) / 2 / (n - 1)
 
-                self.stats["bots"][a]["elo"] = round(ra + k * (sa - ea), 1)
-                self.stats["bots"][b]["elo"] = round(rb + k * (sb - eb), 1)
+                deltas[a] += k * (sa - ea)
+                deltas[b] += k * (sb - eb)
+
+        # Apply all deltas at once
+        for name, delta in deltas.items():
+            self.stats["bots"][name]["elo"] = round(elo_snap[name] + delta, 1)
 
     # ------------------------------------------------------------------
     # mbb/hand helpers
