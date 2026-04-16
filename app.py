@@ -894,20 +894,27 @@ def initialize_tournament():
             # Handle pending bots (format: "pending:<submission_id>")
             if bot_name.startswith('pending:'):
                 sub_id = bot_name.split(':', 1)[1]
+                # Reload submissions from disk to get latest state
+                with review_system._lock:
+                    review_system.submissions = review_system._load_submissions()
                 sub = review_system.submissions.get("submissions", {}).get(sub_id)
                 if not sub or sub["status"] != "pending_review":
+                    logging.warning(f"Pending bot {sub_id}: submission not found or status={sub.get('status') if sub else 'N/A'}")
                     continue
                 code_file = sub.get("code_file")
                 if not code_file or not os.path.exists(code_file):
+                    logging.warning(f"Pending bot {sub_id}: code file missing ({code_file})")
                     continue
                 with open(code_file, 'r', encoding='utf-8') as f:
                     code = f.read()
                 validation = review_system._validate_bot_code(code, sub["bot_name"])
                 if not validation.get("valid"):
+                    logging.warning(f"Pending bot {sub_id}: validation failed: {validation.get('error')}")
                     continue
                 # Load bot from source code
                 bot_instance = bot_storage._load_bot_from_string(code, sub["bot_name"])
                 if bot_instance is None:
+                    logging.warning(f"Pending bot {sub_id}: _load_bot_from_string returned None")
                     continue
                 actual_name = sub["bot_name"]
             else:
