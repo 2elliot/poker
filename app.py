@@ -903,6 +903,8 @@ def initialize_tournament():
         bot_count = {}
         # Map frontend IDs to backend player names (needed for pending bots)
         player_map = {}
+        # Track bot ownership for debug message filtering
+        bot_owners = {}  # player_name -> username
 
         for bot_data in selected_bot_names:
             if isinstance(bot_data, dict):
@@ -941,6 +943,7 @@ def initialize_tournament():
                     logging.warning(f"Pending bot {sub_id}: _load_bot_from_string returned None")
                     continue
                 actual_name = sub["bot_name"]
+                bot_owner = sub.get("submitter_username")
             else:
                 if MASTER_PASSWORD is None:
                     continue
@@ -948,6 +951,9 @@ def initialize_tournament():
                 if bot_instance is None:
                     continue
                 actual_name = bot_name
+                # Look up owner from approved_bots
+                approved = review_system.submissions.get("approved_bots", {}).get(bot_name)
+                bot_owner = approved.get("submitter_username") if approved else None
 
             if actual_name not in bot_count:
                 bot_count[actual_name] = 0
@@ -970,6 +976,8 @@ def initialize_tournament():
 
             player_names.append(player_name)
             player_map[frontend_id] = player_name
+            if bot_owner:
+                bot_owners[player_name] = bot_owner
             bot_wrapper = BotWrapper(player_name, unique_bot, BOT_TURN_TIMEOUT)
             bot_manager.bots[player_name] = bot_wrapper
 
@@ -988,6 +996,7 @@ def initialize_tournament():
             tournament_state['bot_manager'] = bot_manager
             tournament_state['tournament'] = tournament
             tournament_state['settings'] = settings
+            tournament_state['bot_owners'] = bot_owners
             _clear_hand_state()
 
             # Clear log queue
@@ -1308,12 +1317,24 @@ def step_tournament():
             game.process_action(player_id, action, amount)
             game.advance_to_next_player()
 
+            # Collect debug messages from the bot
+            debug_msgs = []
+            if hasattr(bot.bot, '_drain_debug_messages'):
+                raw_msgs = bot.bot._drain_debug_messages()
+                if raw_msgs:
+                    # Only include if current user owns this bot
+                    bot_owners = tournament_state.get('bot_owners', {})
+                    owner = bot_owners.get(player_id)
+                    current_username = current_user.username if current_user.is_authenticated else None
+                    if owner and current_username and owner == current_username:
+                        debug_msgs = raw_msgs
+
             # Detect RAISE→ALL_IN conversion (player went to 0 chips after a raise)
             action_name = action.name.lower()
             if action_name == 'raise' and game.player_chips[player_id] == 0:
                 action_name = 'all_in'
 
-            return jsonify({
+            result = {
                 'success': True,
                 'complete': False,
                 'event': 'action',
@@ -1326,7 +1347,10 @@ def step_tournament():
                 'communityCards': [serialize_card(c) for c in game.community_cards],
                 'phase': tournament_state['hand_phase'],
                 'state': get_tournament_state_dict(tournament)
-            })
+            }
+            if debug_msgs:
+                result['debug'] = debug_msgs
+            return jsonify(result)
 
     except Exception as e:
         logging.error(f"Error in step_tournament: {str(e)}")

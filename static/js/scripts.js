@@ -600,12 +600,15 @@ function setupLogStreaming() {
         try {
             const logEntry = JSON.parse(event.data);
             if (logEntry.type !== 'heartbeat') {
-                // Hide admin-only messages from non-admin users
                 const isAdmin = typeof IS_ADMIN !== 'undefined' && IS_ADMIN;
-                if (logEntry.category === 'admin' && !isAdmin) return;
+                const category = logEntry.category || 'general';
+
+                // Admin-category messages only for admins
+                if (category === 'admin' && !isAdmin) return;
 
                 const className = getLogClassName(logEntry);
-                logToConsole(logEntry.message, className, 'backend');
+                const source = category === 'admin' ? 'admin' : 'backend';
+                logToConsole(logEntry.message, className, source);
             }
         } catch (e) {
             // Ignore parse errors
@@ -737,7 +740,8 @@ function clearTable() {
 // ============================================================================
 
 // Console functions
-// source: 'game' = frontend game events, 'backend' = SSE stream, 'admin' = admin-only
+// source: 'game' = frontend game events, 'backend' = SSE stream,
+//         'debug' = bot debug output, 'admin' = admin-only
 function logToConsole(message, className = '', source = 'game') {
     const consoleContent = document.getElementById('consoleContent');
     const line = document.createElement('div');
@@ -746,27 +750,26 @@ function logToConsole(message, className = '', source = 'game') {
     const timestamp = new Date().toLocaleTimeString();
     line.textContent = `[${timestamp}] ${message}`;
 
-    // Apply current filter
-    const filter = document.getElementById('consoleFilter');
-    const filterVal = filter ? filter.value : 'all';
-    if (filterVal !== 'all' && source !== filterVal) {
+    // Check if this source is currently toggled on
+    const btn = document.querySelector(`.console-filter-btn[data-filter="${source}"]`);
+    if (btn && !btn.classList.contains('active')) {
         line.style.display = 'none';
     }
 
     consoleContent.appendChild(line);
-    // Keep console from growing unbounded
     while (consoleContent.children.length > 500) {
         consoleContent.removeChild(consoleContent.firstChild);
     }
     consoleContent.scrollTop = consoleContent.scrollHeight;
 }
 
-function updateConsoleFilter() {
-    const filter = document.getElementById('consoleFilter').value;
-    const lines = document.querySelectorAll('#consoleContent .console-line');
+function toggleConsoleFilter(btn) {
+    btn.classList.toggle('active');
+    const source = btn.dataset.filter;
+    const visible = btn.classList.contains('active');
+    const lines = document.querySelectorAll(`#consoleContent .console-line[data-source="${source}"]`);
     for (const line of lines) {
-        const src = line.dataset.source || 'game';
-        line.style.display = (filter === 'all' || src === filter) ? '' : 'none';
+        line.style.display = visible ? '' : 'none';
     }
 }
 
@@ -1062,7 +1065,14 @@ function handleStepEvent(data) {
 
     } else if (event === 'action') {
         const actionStr = formatAction(data.player, data.action, data.amount);
-        logToConsole(actionStr, 'event-action');
+        logToConsole(actionStr, 'event-action', 'game');
+
+        // Show debug messages from the bot (only sent if user owns it)
+        if (data.debug && data.debug.length > 0) {
+            for (const msg of data.debug) {
+                logToConsole(`[${data.player}] ${msg}`, 'event-debug', 'debug');
+            }
+        }
 
         if (data.action === 'fold') {
             const player = findPlayer(data.player);

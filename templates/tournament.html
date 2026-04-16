@@ -124,11 +124,12 @@
                 <div class="console-header">
                     <h3>Game Console</h3>
                     <div class="console-controls">
-                        <select id="consoleFilter" onchange="updateConsoleFilter()">
-                            <option value="all">All Messages</option>
-                            <option value="game">Game Only</option>
-                            <option value="backend">Backend Only</option>
-                        </select>
+                        <button class="console-filter-btn active" data-filter="game" onclick="toggleConsoleFilter(this)">Game</button>
+                        <button class="console-filter-btn active" data-filter="backend" onclick="toggleConsoleFilter(this)">Backend</button>
+                        <button class="console-filter-btn active" data-filter="debug" onclick="toggleConsoleFilter(this)">Debug</button>
+                        {% if is_admin %}
+                        <button class="console-filter-btn active" data-filter="admin" onclick="toggleConsoleFilter(this)">Admin</button>
+                        {% endif %}
                         <button class="console-clear" onclick="clearConsole()">Clear</button>
                     </div>
                 </div>

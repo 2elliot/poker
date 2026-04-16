@@ -96,6 +96,9 @@ class MyBot(PokerBotAPI):
         """
         Decide what action to take
         """
+        # Use self.debug() to log messages visible in the game console
+        self.debug(f"My cards: {hole_cards}, pot: {game_state.pot}")
+
         if PlayerAction.CALL in legal_actions:
             return PlayerAction.CALL, 0
 
@@ -121,6 +124,22 @@ class MyBot(PokerBotAPI):
                     <li><code>hole_cards</code> - Your two private cards</li>
                     <li><code>legal_actions</code> - What you can do (FOLD, CHECK, CALL, RAISE, ALL_IN)</li>
                 </ul>
+            </div>
+
+            <div class="instructions">
+                <h3>Debugging Your Bot</h3>
+                <p style="margin-bottom: 10px; color: #ccc;">
+                    Use <code style="background: #1a1a1a; padding: 2px 6px; border-radius: 3px;">self.debug(message)</code> anywhere in your bot to log messages to the game console.
+                    Debug messages are only visible to you when testing your own bot in the Custom Table.
+                </p>
+                <ul style="margin-left: 20px; color: #ccc;">
+                    <li><code>self.debug(f"Cards: {hole_cards}")</code> - Log your cards</li>
+                    <li><code>self.debug(f"Pot odds: {game_state.pot / bet}")</code> - Log calculations</li>
+                    <li><code>self.debug(f"Decision: RAISE to {amount}")</code> - Log decisions</li>
+                </ul>
+                <p style="margin-top: 10px; color: #888; font-size: 13px;">
+                    Toggle the <strong>Debug</strong> button in the console header to show/hide debug output. Other players cannot see your debug messages.
+                </p>
             </div>
 
             <div class="instructions">
@@ -419,7 +438,12 @@ class MyBot(PokerBotAPI):
         }
     }
 
-    function dismissBot(submissionId) {
+    async function dismissBot(submissionId) {
+        try {
+            await fetch(`/api/bots/withdraw/${submissionId}`, { method: 'POST' });
+        } catch (e) {
+            // Best-effort — remove from UI either way
+        }
         const card = document.getElementById(`card-${submissionId}`);
         if (card) card.remove();
     }

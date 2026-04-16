@@ -953,21 +953,43 @@ body.page-tournament {
 .console-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
 }
 
-.console-controls select {
-    background: #1a1a1a;
+.console-filter-btn {
+    background: transparent;
     border: 1px solid #444;
-    color: #aaa;
-    padding: 3px 8px;
+    color: #666;
+    padding: 2px 8px;
     border-radius: 3px;
-    font-size: 11px;
+    font-size: 10px;
     cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.console-controls select:hover {
+.console-filter-btn:hover {
     border-color: #666;
+    color: #aaa;
+}
+
+.console-filter-btn.active {
+    background: #333;
+    border-color: #555;
+    color: #ccc;
+}
+
+.console-filter-btn[data-filter="debug"].active {
+    background: #2a2a1a;
+    border-color: #665;
+    color: #cc6;
+}
+
+.console-filter-btn[data-filter="admin"].active {
+    background: #2a1a2a;
+    border-color: #656;
+    color: #c6c;
 }
 
 .console-clear {
@@ -1020,6 +1042,11 @@ body.page-tournament {
 
 .console-line.event-error {
     color: #e24a4a;
+}
+
+.console-line.event-debug {
+    color: #cc6;
+    font-style: italic;
 }
 
 /* Statistics View */

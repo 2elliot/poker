@@ -22,6 +22,27 @@ class PokerBotAPI(ABC):
     def __init__(self, name: str):
         self.name = name
         self.logger = logging.getLogger(f"bot.{name}")
+        self._debug_messages = []
+
+    def debug(self, message: str):
+        """
+        Log a debug message that will appear in the game console
+        when testing your bot in a custom table. Useful for understanding
+        your bot's decision-making process.
+
+        Args:
+            message: The debug message to log
+        """
+        self._debug_messages.append(str(message))
+        # Cap at 50 messages per action to prevent abuse
+        if len(self._debug_messages) > 50:
+            self._debug_messages = self._debug_messages[-50:]
+
+    def _drain_debug_messages(self):
+        """Internal: return and clear pending debug messages."""
+        msgs = self._debug_messages[:]
+        self._debug_messages.clear()
+        return msgs
     
     @abstractmethod
     def get_action(self, game_state: GameState, hole_cards: List[Card], 
