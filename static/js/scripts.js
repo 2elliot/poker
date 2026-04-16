@@ -935,7 +935,7 @@ async function initializeTournament() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 bots: state.tablePlayers.map(p => ({
-                    id: p.botId,
+                    id: p.originalBotId || p.botId,
                     name: p.name,
                     frontendId: p.id
                 })),
@@ -956,6 +956,10 @@ async function initializeTournament() {
                 for (const player of state.tablePlayers) {
                     const backendName = data.player_map[player.id];
                     if (backendName && backendName !== player.id) {
+                        // Preserve original bot ID for re-initialization
+                        if (!player.originalBotId) {
+                            player.originalBotId = player.botId;
+                        }
                         // Update statistics and chipHistory keys
                         if (state.statistics[player.id]) {
                             state.statistics[backendName] = state.statistics[player.id];
@@ -1108,9 +1112,12 @@ function handleStepEvent(data) {
             }
         }
 
+        const actingPlayer = findPlayer(data.player);
         if (data.action === 'fold') {
-            const player = findPlayer(data.player);
-            if (player) player.folded = true;
+            if (actingPlayer) actingPlayer.folded = true;
+        }
+        if (data.action === 'all_in') {
+            if (actingPlayer) actingPlayer.allIn = true;
         }
 
         syncChipsAndBets(data);
@@ -1204,6 +1211,7 @@ function syncTournamentState(ts) {
             const player = findPlayer(bp.id);
             if (player && bp.isEliminated) {
                 player.chips = 0;
+                player.allIn = false;
             }
         }
     }
