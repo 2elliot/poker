@@ -756,11 +756,16 @@ function logToConsole(message, className = '', source = 'game') {
         line.style.display = 'none';
     }
 
+    // Only auto-scroll if user is already near the bottom and line is visible
+    const nearBottom = consoleContent.scrollHeight - consoleContent.scrollTop - consoleContent.clientHeight < 40;
+
     consoleContent.appendChild(line);
     while (consoleContent.children.length > 500) {
         consoleContent.removeChild(consoleContent.firstChild);
     }
-    consoleContent.scrollTop = consoleContent.scrollHeight;
+    if (nearBottom && line.style.display !== 'none') {
+        consoleContent.scrollTop = consoleContent.scrollHeight;
+    }
 }
 
 function toggleConsoleFilter(btn) {
