@@ -517,11 +517,52 @@ body.page-tournament {
     color: #e0e0e0;
     font-size: 12px;
     text-align: right;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.setting-row input::-webkit-outer-spin-button,
+.setting-row input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
 }
 
 .setting-row input:focus {
     border-color: #4a90e2;
     outline: none;
+}
+
+.toggle-btn {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: #444;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s;
+}
+
+.toggle-btn .toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: #999;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.toggle-btn.active {
+    background: #4a90e2;
+}
+
+.toggle-btn.active .toggle-knob {
+    left: 18px;
+    background: #fff;
 }
 
 .sidebar-header {

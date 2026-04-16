@@ -1006,11 +1006,45 @@ async function stepGame() {
             handleStepEvent(data);
 
             if (data.complete) {
-                stopGameLoop();
-                state.isPlaying = false;
-                state.handInProgress = false;
-                document.getElementById('playBtn').textContent = 'Play';
                 logToConsole('=== TOURNAMENT COMPLETE ===', 'event-winner');
+
+                const loopEnabled = document.getElementById('settingLoop')?.classList.contains('active');
+                if (loopEnabled) {
+                    // Auto-restart: reset backend, reinitialize, keep playing
+                    state.handInProgress = false;
+                    stopGameLoop();
+                    try {
+                        await fetch(`${API_BASE_URL}/tournament/reset`, { method: 'POST' });
+                    } catch (e) { /* ignore */ }
+
+                    state.tournamentInitialized = false;
+                    state.gamesPlayed++;
+                    const resetChips = getCustomSettings().startingChips;
+                    state.tablePlayers.forEach(p => {
+                        p.chips = resetChips;
+                        p.bet = 0;
+                        p.folded = false;
+                        p.allIn = false;
+                        p.cards = [];
+                    });
+                    state.communityCards = [];
+                    state.pot = 0;
+                    renderTable();
+
+                    logToConsole('--- Auto-restarting match ---', 'event-phase');
+                    const reinit = await initializeTournament();
+                    if (reinit) {
+                        startGameLoop();
+                    } else {
+                        state.isPlaying = false;
+                        document.getElementById('playBtn').textContent = 'Play';
+                    }
+                } else {
+                    stopGameLoop();
+                    state.isPlaying = false;
+                    state.handInProgress = false;
+                    document.getElementById('playBtn').textContent = 'Play';
+                }
             }
         } else {
             logToConsole(`Error: ${data.error}`, 'event-error');

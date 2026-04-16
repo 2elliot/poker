@@ -50,6 +50,12 @@
                         <label for="settingBlindInterval">Blind Increase (hands)</label>
                         <input type="number" id="settingBlindInterval" value="10" min="1" max="100" step="1">
                     </div>
+                    <div class="setting-row setting-row-toggle">
+                        <label for="settingLoop">Auto-restart matches</label>
+                        <button type="button" class="toggle-btn active" id="settingLoop" onclick="this.classList.toggle('active')">
+                            <span class="toggle-knob"></span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -125,7 +131,7 @@
                     <h3>Game Console</h3>
                     <div class="console-controls">
                         <button class="console-filter-btn active" data-filter="game" onclick="toggleConsoleFilter(this)">Game</button>
-                        <button class="console-filter-btn active" data-filter="backend" onclick="toggleConsoleFilter(this)">Backend</button>
+                        <button class="console-filter-btn" data-filter="backend" onclick="toggleConsoleFilter(this)">Backend</button>
                         <button class="console-filter-btn active" data-filter="debug" onclick="toggleConsoleFilter(this)">Debug</button>
                         {% if is_admin %}
                         <button class="console-filter-btn active" data-filter="admin" onclick="toggleConsoleFilter(this)">Admin</button>
