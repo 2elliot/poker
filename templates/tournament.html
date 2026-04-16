@@ -123,7 +123,14 @@
                 <div class="resize-handle horizontal" id="consoleResize"></div>
                 <div class="console-header">
                     <h3>Game Console</h3>
-                    <button class="console-clear" onclick="clearConsole()">Clear</button>
+                    <div class="console-controls">
+                        <select id="consoleFilter" onchange="updateConsoleFilter()">
+                            <option value="all">All Messages</option>
+                            <option value="game">Game Only</option>
+                            <option value="backend">Backend Only</option>
+                        </select>
+                        <button class="console-clear" onclick="clearConsole()">Clear</button>
+                    </div>
                 </div>
                 <div class="console-content" id="consoleContent"></div>
             </div>
@@ -153,6 +160,9 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+    const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+</script>
 <script src="/static/js/bot-profile.js"></script>
 <script src="/static/js/scripts.js"></script>
 {% endblock %}

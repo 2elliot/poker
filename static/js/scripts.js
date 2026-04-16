@@ -600,8 +600,12 @@ function setupLogStreaming() {
         try {
             const logEntry = JSON.parse(event.data);
             if (logEntry.type !== 'heartbeat') {
+                // Hide admin-only messages from non-admin users
+                const isAdmin = typeof IS_ADMIN !== 'undefined' && IS_ADMIN;
+                if (logEntry.category === 'admin' && !isAdmin) return;
+
                 const className = getLogClassName(logEntry);
-                logToConsole(logEntry.message, className);
+                logToConsole(logEntry.message, className, 'backend');
             }
         } catch (e) {
             // Ignore parse errors
@@ -733,18 +737,37 @@ function clearTable() {
 // ============================================================================
 
 // Console functions
-function logToConsole(message, className = '') {
+// source: 'game' = frontend game events, 'backend' = SSE stream, 'admin' = admin-only
+function logToConsole(message, className = '', source = 'game') {
     const consoleContent = document.getElementById('consoleContent');
     const line = document.createElement('div');
     line.className = `console-line ${className}`;
+    line.dataset.source = source;
     const timestamp = new Date().toLocaleTimeString();
     line.textContent = `[${timestamp}] ${message}`;
+
+    // Apply current filter
+    const filter = document.getElementById('consoleFilter');
+    const filterVal = filter ? filter.value : 'all';
+    if (filterVal !== 'all' && source !== filterVal) {
+        line.style.display = 'none';
+    }
+
     consoleContent.appendChild(line);
     // Keep console from growing unbounded
     while (consoleContent.children.length > 500) {
         consoleContent.removeChild(consoleContent.firstChild);
     }
     consoleContent.scrollTop = consoleContent.scrollHeight;
+}
+
+function updateConsoleFilter() {
+    const filter = document.getElementById('consoleFilter').value;
+    const lines = document.querySelectorAll('#consoleContent .console-line');
+    for (const line of lines) {
+        const src = line.dataset.source || 'game';
+        line.style.display = (filter === 'all' || src === filter) ? '' : 'none';
+    }
 }
 
 function clearConsole() {
@@ -924,6 +947,28 @@ async function initializeTournament() {
 
         if (data.success) {
             state.tournamentInitialized = true;
+
+            // Remap frontend player IDs to backend names (needed for pending bots)
+            if (data.player_map) {
+                for (const player of state.tablePlayers) {
+                    const backendName = data.player_map[player.id];
+                    if (backendName && backendName !== player.id) {
+                        // Update statistics and chipHistory keys
+                        if (state.statistics[player.id]) {
+                            state.statistics[backendName] = state.statistics[player.id];
+                            delete state.statistics[player.id];
+                        }
+                        if (state.chipHistory[player.id]) {
+                            state.chipHistory[backendName] = state.chipHistory[player.id];
+                            delete state.chipHistory[player.id];
+                        }
+                        player.id = backendName;
+                        player.botId = backendName;
+                        player.name = backendName;
+                    }
+                }
+            }
+
             logToConsole('Tournament initialized', 'event-phase');
             return true;
         } else {

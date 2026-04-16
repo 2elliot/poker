@@ -111,12 +111,32 @@ class QueueHandler(logging.Handler):
         super().__init__()
         self.log_queue = log_queue
 
+    def _categorize(self, record):
+        """Categorize log messages for frontend filtering."""
+        msg = record.getMessage().lower()
+        name = record.name.lower()
+
+        # Match scheduler / automated match messages
+        if 'match_scheduler' in name or 'match started' in msg or 'match complete' in msg:
+            return 'match'
+        # Bot submission / approval messages
+        if any(k in msg for k in ['submission', 'approved', 'rejected', 'resubmit', 'review']):
+            return 'admin'
+        # Elo / stats
+        if any(k in msg for k in ['elo', 'leaderboard', 'reset']):
+            return 'admin'
+        # Server / system
+        if any(k in msg for k in ['initialized', 'starting', 'shutdown', 'password', 'loaded']):
+            return 'system'
+        return 'general'
+
     def emit(self, record):
         log_entry = {
             'timestamp': time.time(),
             'level': record.levelname,
             'message': self.format(record),
-            'name': record.name
+            'name': record.name,
+            'category': self._categorize(record)
         }
         self.log_queue.put(log_entry)
 
@@ -881,12 +901,16 @@ def initialize_tournament():
 
         player_names = []
         bot_count = {}
+        # Map frontend IDs to backend player names (needed for pending bots)
+        player_map = {}
 
         for bot_data in selected_bot_names:
             if isinstance(bot_data, dict):
                 bot_name = bot_data.get('id') or bot_data.get('name')
+                frontend_id = bot_data.get('frontendId', bot_name)
             else:
                 bot_name = bot_data
+                frontend_id = bot_name
 
             if not bot_name:
                 continue
@@ -945,6 +969,7 @@ def initialize_tournament():
                 unique_bot = bot_instance
 
             player_names.append(player_name)
+            player_map[frontend_id] = player_name
             bot_wrapper = BotWrapper(player_name, unique_bot, BOT_TURN_TIMEOUT)
             bot_manager.bots[player_name] = bot_wrapper
 
@@ -973,7 +998,8 @@ def initialize_tournament():
 
         return jsonify({
             'success': True,
-            'message': f'Tournament initialized with {len(tournament.players)} bots'
+            'message': f'Tournament initialized with {len(tournament.players)} bots',
+            'player_map': player_map
         })
 
     except Exception as e:

@@ -950,6 +950,26 @@ body.page-tournament {
     text-transform: uppercase;
 }
 
+.console-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.console-controls select {
+    background: #1a1a1a;
+    border: 1px solid #444;
+    color: #aaa;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.console-controls select:hover {
+    border-color: #666;
+}
+
 .console-clear {
     background: transparent;
     border: 1px solid #444;
