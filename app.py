@@ -189,7 +189,8 @@ def inject_globals():
     """Inject global template variables for nav bar"""
     is_admin = current_user.is_authenticated and getattr(current_user, 'is_admin', False)
     username = current_user.username if current_user.is_authenticated else None
-    return dict(is_admin=is_admin, current_username=username)
+    ga_measurement_id = os.environ.get('GA_MEASUREMENT_ID', '')
+    return dict(is_admin=is_admin, current_username=username, ga_measurement_id=ga_measurement_id)
 
 
 # ============================================================================
