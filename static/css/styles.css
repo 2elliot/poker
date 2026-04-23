@@ -68,6 +68,24 @@ body {
     color: #4a90e2;
 }
 
+.paused-banner {
+    background: rgba(255, 193, 7, 0.12);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #e0b040;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.paused-banner strong {
+    color: #f0c040;
+}
+
 .nav-links {
     display: flex;
     gap: 8px;

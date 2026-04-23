@@ -829,6 +829,44 @@ def admin_delete_bot(bot_name):
         return jsonify({"success": False, "error": "Failed to delete bot"}), 500
 
 
+@app.route('/api/admin/scheduler/toggle', methods=['POST'])
+@login_required
+def admin_toggle_scheduler():
+    """ADMIN - Pause or resume the background match scheduler."""
+    if not current_user.is_admin:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json(silent=True) or {}
+    paused_raw = data.get('paused')
+    if paused_raw is None:
+        new_state = not match_scheduler.is_paused()
+    else:
+        new_state = bool(paused_raw)
+
+    if new_state:
+        match_scheduler.pause()
+        action = "SCHEDULER_PAUSED"
+        message = "Background matches paused"
+    else:
+        match_scheduler.resume()
+        action = "SCHEDULER_RESUMED"
+        message = "Background matches resumed"
+
+    auth_system._log_audit_event(
+        action,
+        current_user.username,
+        request.remote_addr or "unknown",
+        message,
+    )
+    return jsonify({"success": True, "paused": match_scheduler.is_paused(), "message": message})
+
+
+@app.route('/api/scheduler/status', methods=['GET'])
+def get_scheduler_status():
+    """Public endpoint for the frontend to check pause state."""
+    return jsonify({"success": True, "paused": match_scheduler.is_paused()})
+
+
 @app.route('/api/admin/reset-leaderboard', methods=['POST'])
 @login_required
 def admin_reset_leaderboard():

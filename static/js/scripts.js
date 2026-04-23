@@ -78,6 +78,10 @@ function setMode(mode) {
     document.getElementById('spectatorControls').style.display = mode === 'spectator' ? '' : 'none';
     document.getElementById('customControls').style.display = mode === 'custom' ? '' : 'none';
 
+    // Banner only relevant in spectator mode
+    const banner = document.getElementById('spectatorPausedBanner');
+    if (banner && mode !== 'spectator') banner.style.display = 'none';
+
     if (mode === 'spectator') {
         // Stop custom game if running
         stopGameLoop();
@@ -186,11 +190,23 @@ async function pollLiveMatch() {
 
         // Update match info
         state.spectatorMatch = data.match;
+        state.spectatorPaused = !!data.paused;
+        const banner = document.getElementById('spectatorPausedBanner');
+        if (banner) banner.style.display = state.spectatorPaused ? 'block' : 'none';
 
         // Queue new events for replay
         if (data.events && data.events.length > 0) {
             state.spectatorEventQueue.push(...data.events);
             state.spectatorLastSeq = data.last_seq;
+        }
+
+        // Reflect paused state in the empty-table message when no match is live
+        if (state.spectatorPaused && !data.match) {
+            const emptyMsg = document.getElementById('emptyMessage');
+            if (emptyMsg) {
+                emptyMsg.querySelector('h3').textContent = 'Background Matches Paused';
+                emptyMsg.querySelector('p').textContent = 'An admin has paused automatic matches. Ask an admin to unpause if you want live games to resume. You can still run Custom Tables.';
+            }
         }
 
         // Update sidebar

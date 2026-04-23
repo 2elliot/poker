@@ -22,11 +22,13 @@ class MatchScheduler:
 
     def __init__(self, bot_storage: SecureBotStorage, master_password: str,
                  stats_file: str = "match_stats.json",
+                 state_file: str = "scheduler_state.json",
                  min_bots: int = 2, table_size: int = 6,
                  hands_per_match: int = 200):
         self.bot_storage = bot_storage
         self.master_password = master_password
         self.stats_file = stats_file
+        self.state_file = state_file
         self.min_bots = min_bots
         self.table_size = table_size
         self.hands_per_match = hands_per_match
@@ -34,6 +36,7 @@ class MatchScheduler:
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
+        self._paused = self._load_paused_state()
 
         self.logger = logging.getLogger("match_scheduler")
         self.stats = self._load_stats()
@@ -556,6 +559,10 @@ class MatchScheduler:
                 if self._pending_reset:
                     self._apply_reset()
 
+                if self._paused:
+                    self._stop_event.wait(5)
+                    continue
+
                 bot_names = self._pick_bots()
                 if len(bot_names) >= self.min_bots:
                     self._run_single_match(bot_names)
@@ -570,6 +577,37 @@ class MatchScheduler:
                 self._stop_event.wait(10)
 
         self.logger.info("Match scheduler stopped")
+
+    def _load_paused_state(self) -> bool:
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, 'r') as f:
+                    return bool(json.load(f).get("paused", False))
+            except (json.JSONDecodeError, IOError):
+                pass
+        return False
+
+    def _save_paused_state(self):
+        try:
+            tmp = self.state_file + ".tmp"
+            with open(tmp, 'w') as f:
+                json.dump({"paused": self._paused}, f)
+            os.replace(tmp, self.state_file)
+        except IOError as e:
+            self.logger.error(f"Failed to save scheduler state: {e}")
+
+    def pause(self):
+        self._paused = True
+        self._save_paused_state()
+        self.logger.info("Match scheduler paused")
+
+    def resume(self):
+        self._paused = False
+        self._save_paused_state()
+        self.logger.info("Match scheduler resumed")
+
+    def is_paused(self) -> bool:
+        return self._paused
 
     # ------------------------------------------------------------------
     # Public API
@@ -629,6 +667,7 @@ class MatchScheduler:
             "events": new_events,
             "last_seq": new_events[-1]["seq"] if new_events else since_seq,
             "match": self.live_match,
+            "paused": self._paused,
         }
 
     def reset_stats(self):

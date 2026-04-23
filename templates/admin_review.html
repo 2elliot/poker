@@ -18,7 +18,8 @@
                 <span class="stat-value" id="approvedToday">0</span>
             </div>
         </div>
-        <div style="margin-top: 15px;">
+        <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary" id="schedulerToggleBtn" onclick="toggleScheduler()" style="font-size: 13px; padding: 8px 16px;">Loading...</button>
             <button class="btn btn-danger" onclick="resetLeaderboard()" style="font-size: 13px; padding: 8px 16px;">Reset Leaderboard</button>
         </div>
     </div>
@@ -337,6 +338,40 @@
         }
     }
 
+    function updateSchedulerBtn(paused) {
+        const btn = document.getElementById('schedulerToggleBtn');
+        if (!btn) return;
+        btn.textContent = paused ? 'Resume Background Matches' : 'Pause Background Matches';
+        btn.classList.toggle('btn-primary', paused);
+        btn.classList.toggle('btn-secondary', !paused);
+    }
+
+    async function loadSchedulerStatus() {
+        try {
+            const res = await fetch('/api/scheduler/status');
+            const data = await res.json();
+            if (data.success) updateSchedulerBtn(data.paused);
+        } catch (e) { }
+    }
+
+    async function toggleScheduler() {
+        try {
+            const res = await fetch('/api/admin/scheduler/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await res.json();
+            if (result.success) {
+                updateSchedulerBtn(result.paused);
+                showToast(result.message, 'success');
+            } else {
+                showToast(`Error: ${result.error || 'Toggle failed'}`, 'error');
+            }
+        } catch (e) {
+            showToast('Failed to toggle scheduler', 'error');
+        }
+    }
+
     async function resetLeaderboard() {
         if (!confirm('Are you sure you want to reset ALL leaderboard rankings? This clears every bot\'s Elo, win rates, and match history. This cannot be undone.')) {
             return;
@@ -372,6 +407,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         loadSubmissions();
+        loadSchedulerStatus();
     });
 </script>
 {% endblock %}
