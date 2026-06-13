@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard - Poker Bots (Archived)</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="page-leaderboard">
+    <!-- Archive Banner -->
+    <div class="archive-banner">
+        This site is an archived snapshot. The leaderboard below shows <strong>placeholder data</strong>, not real match results.
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="main-nav">
+        <div class="nav-brand">
+            <a href="/">Poker Bots</a>
+        </div>
+        <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links" id="navLinks">
+            <a href="/" class="nav-link">Tournament</a>
+            <a href="/leaderboard.html" class="nav-link active">Leaderboard</a>
+        </div>
+        <div class="nav-user"></div>
+    </nav>
+
+    <script>
+    function toggleMobileNav() {
+        document.getElementById('navLinks').classList.toggle('open');
+        document.getElementById('navHamburger').classList.toggle('open');
+    }
+    </script>
+
+    <div class="page-content">
+        <div class="page-header">
+            <h1>Leaderboard</h1>
+            <p class="subtitle">Bot rankings (template data &mdash; not real results)</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="lb-filters">
+            <div class="lb-filter-group">
+                <label for="filterMinHands">Min. Hands</label>
+                <select id="filterMinHands" onchange="applyFilters()">
+                    <option value="0" selected>All bots</option>
+                    <option value="100">100+</option>
+                    <option value="500">500+</option>
+                    <option value="1000">1,000+</option>
+                    <option value="5000">5,000+ (calibrated)</option>
+                </select>
+            </div>
+            <div class="lb-filter-group">
+                <label for="filterSort">Sort by</label>
+                <select id="filterSort" onchange="applyFilters()">
+                    <option value="elo" selected>Elo Rating</option>
+                    <option value="mbb">mbb/hand</option>
+                    <option value="win_rate">Win Rate</option>
+                    <option value="hands_played">Hands Played</option>
+                </select>
+            </div>
+            <div class="lb-filter-group">
+                <button class="btn btn-secondary lb-toggle-chart" onclick="toggleScatterChart()">
+                    <span id="chartToggleLabel">Hide Style Chart</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- VPIP vs PFR Scatter Chart -->
+        <div class="lb-scatter-container" id="scatterContainer">
+            <h3>Play Style Map <span style="color: #666; font-weight: normal; font-size: 13px;">(VPIP vs PFR)</span></h3>
+            <canvas id="scatterChart" width="600" height="400"></canvas>
+        </div>
+
+        <!-- Leaderboard Table -->
+        <div class="section">
+            <div id="leaderboardContent">
+                <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bot Profile Modal -->
+    <div class="modal-overlay" id="botProfileModal" style="display: none;" onclick="closeBotProfile(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeBotProfile()">&times;</button>
+            <div id="botProfileContent">
+                <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/bot-profile.js"></script>
+    <script src="/static/js/leaderboard.js"></script>
+</body>
+</html>

@@ -1,37 +1,31 @@
-# Claude Code local settings
-.claude/
-
-# Environment variables
-.env
-
-# Virtual environment
-venv/
+# Only published static assets belong on this branch.
+# Leftover Python tooling from the main branch is ignored here.
 __pycache__/
 *.pyc
-
-# Generated runtime data (don't commit these)
-admin_auth.json
-users.json
-match_stats.json
-scheduler_state.json
-bot_reviews/
-encrypted_bots/
-logs/
-backend/logs/
-
-# Atomic-write temp files (e.g. submissions.json.tmp)
-*.tmp
+venv/
+.venv/
 
 # Local testing
 *.log
 .DS_Store
 Thumbs.db
 
-# Sample / student bot files (approved bots live in encrypted_bots/)
-players/
-sample_bots/
-
 # IDE / tool configs
 .claude/
 .vscode/
 .idea/
+
+# Server-only artifacts (from main branch — should never be committed here)
+encrypted_bots/
+sample_bots/
+players/
+bot_reviews/
+logs/
+backend/
+tools/
+admin_auth.json
+users.json
+match_stats.json
+scheduler_state.json
+*.tmp
+.env

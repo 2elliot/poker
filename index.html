@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament - Poker Bots (Archived)</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="page-tournament">
+    <!-- Archive Banner -->
+    <div class="archive-banner">
+        This site is an archived snapshot. Hands are replayed from pre-recorded sample tournaments, no live play or submissions.
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="main-nav">
+        <div class="nav-brand">
+            <a href="/">Poker Bots</a>
+        </div>
+        <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links" id="navLinks">
+            <a href="/" class="nav-link active">Tournament</a>
+            <a href="/leaderboard.html" class="nav-link">Leaderboard</a>
+        </div>
+        <div class="nav-user"></div>
+    </nav>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+    function toggleMobileNav() {
+        document.getElementById('navLinks').classList.toggle('open');
+        document.getElementById('navHamburger').classList.toggle('open');
+    }
+    function showToast(message, type = 'info', duration = 4000) {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add('show'));
+        setTimeout(() => {
+            toast.classList.remove('show');
+            toast.addEventListener('transitionend', () => toast.remove());
+        }, duration);
+    }
+    </script>
+
+    <!-- Page Content -->
+    <div class="tournament-layout">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="resize-handle vertical" id="sidebarResize"></div>
+            <div id="spectatorSidebar">
+                <div id="livePlayerList" class="bot-list"></div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="tab-content active" id="gameTab">
+                <!-- Controls -->
+                <div class="controls" id="spectatorControls">
+                    <div class="speed-control">
+                        <span class="speed-label">Replay Speed:</span>
+                        <button class="btn btn-secondary" onclick="changeSpectatorSpeed(-1)">-</button>
+                        <span class="speed-value" id="spectatorSpeedValue">4x</span>
+                        <button class="btn btn-secondary" onclick="changeSpectatorSpeed(1)">+</button>
+                    </div>
+                    <span id="spectatorHandInfo" style="color: #888; font-size: 13px;"></span>
+                </div>
+
+                <!-- Game View -->
+                <div class="game-view">
+                    <div class="table-container">
+                        <div id="emptyMessage" class="empty-table">
+                            <h3>Loading recorded match&hellip;</h3>
+                            <p>A sample tournament will start in a moment.</p>
+                        </div>
+                        <div class="poker-table" id="pokerTable" style="display: none;">
+                            <div class="player-seat pos-0 empty" data-seat="0"></div>
+                            <div class="player-seat pos-1 empty" data-seat="1"></div>
+                            <div class="player-seat pos-2 empty" data-seat="2"></div>
+                            <div class="player-seat pos-3 empty" data-seat="3"></div>
+                            <div class="player-seat pos-4 empty" data-seat="4"></div>
+                            <div class="player-seat pos-5 empty" data-seat="5"></div>
+                            <div class="player-seat pos-6 empty" data-seat="6"></div>
+                            <div class="player-seat pos-7 empty" data-seat="7"></div>
+                            <div class="player-seat pos-8 empty" data-seat="8"></div>
+                            <div class="player-seat pos-9 empty" data-seat="9"></div>
+                            <div class="table-center">
+                                <div class="pot-display">
+                                    <div class="pot-label">POT</div>
+                                    <div class="pot-amount" id="potAmount">0</div>
+                                </div>
+                                <div class="community-cards" id="communityCards"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Console -->
+                <div class="console-container" id="console">
+                    <div class="resize-handle horizontal" id="consoleResize"></div>
+                    <div class="console-header">
+                        <h3>Game Console</h3>
+                        <div class="console-controls">
+                            <button class="console-clear" onclick="clearConsole()">Clear</button>
+                        </div>
+                    </div>
+                    <div class="console-content" id="consoleContent"></div>
+                </div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-item">
+                    <span>Players: <span id="playerCount">0</span></span>
+                    <span>Hands Played: <span id="gamesPlayed">0</span></span>
+                </div>
+                <div class="status-item">
+                    <span id="gameStatus">Loading&hellip;</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bot Profile Modal -->
+    <div class="modal-overlay" id="botProfileModal" style="display: none;" onclick="closeBotProfile(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeBotProfile()">&times;</button>
+            <div id="botProfileContent">
+                <div style="text-align: center; padding: 40px;"><span class="loading-spinner"></span> Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/bot-profile.js"></script>
+    <script src="/static/js/scripts.js"></script>
+</body>
+</html>
