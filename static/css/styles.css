@@ -55,19 +55,6 @@ body {
     margin-right: 0;
 }
 
-.nav-author {
-    font-size: 11px;
-    font-weight: 400;
-    color: #666;
-    text-decoration: none;
-    letter-spacing: 0.3px;
-    transition: color 0.15s;
-}
-
-.nav-author:hover {
-    color: #4a90e2;
-}
-
 .paused-banner {
     background: rgba(255, 193, 7, 0.12);
     border: 1px solid rgba(255, 193, 7, 0.4);
@@ -109,15 +96,6 @@ body {
 .nav-link.active {
     color: #4a90e2;
     background: rgba(74, 144, 226, 0.1);
-}
-
-.nav-discord {
-    color: #7289da;
-}
-
-.nav-discord:hover {
-    color: #fff;
-    background: rgba(114, 137, 218, 0.2);
 }
 
 .nav-user {

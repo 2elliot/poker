@@ -24,7 +24,6 @@
     <nav class="main-nav">
         <div class="nav-brand">
             <a href="/">Poker Bots</a>
-            <a href="https://elliotd.net" target="_blank" rel="noopener" class="nav-author">by elliotd</a>
         </div>
         <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Menu">
             <span></span><span></span><span></span>
@@ -36,7 +35,6 @@
             {% if is_admin %}
             <a href="/admin/review" class="nav-link {% block nav_admin %}{% endblock %}">Admin</a>
             {% endif %}
-            <a href="https://discord.gg/Babk3C7X8n" target="_blank" rel="noopener" class="nav-link nav-discord">Discord</a>
         </div>
         <div class="nav-user">
             {% if current_username %}
